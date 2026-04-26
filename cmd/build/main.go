@@ -151,7 +151,10 @@ func startDesigner() {
 	fmt.Printf("Design session ready at %s/design.md\n", sessionDir)
 
 	// 2. Run opencode
-	cmd := exec.Command("opencode", "run", "--agent", "designer", ".")
+	// Launch the interactive TUI. 
+	// The agent 'designer' is pre-configured in .opencode/agents/designer.md
+	// and will be available in the TUI session.
+	cmd := exec.Command("opencode", ".")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -160,6 +163,7 @@ func startDesigner() {
 		fmt.Fprintf(os.Stderr, "Designer session exited with error: %v\n", err)
 		os.Exit(1)
 	}
+
 
 	// 3. Post-session: breakdown + ingest
 	designFile := filepath.Join(sessionDir, "design.md")
