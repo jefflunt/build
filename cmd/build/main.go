@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/jefflunt/build/internal/router"
 	"github.com/jefflunt/build/pkg/version"
 )
+
 
 //go:embed templates/build-designer.md
 var designerInstructions embed.FS
