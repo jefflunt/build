@@ -32,14 +32,26 @@ func main() {
 		fmt.Println(version.Version)
 		os.Exit(0)
 	case "help":
-		fmt.Println("build help - show this help")
-		fmt.Println("build start - start the router service")
-		fmt.Println("build status - show router status")
-		fmt.Println("build seed - seed the database with test data")
-		fmt.Println("build design - start a new design interaction")
-		fmt.Println("build init - initialize the project")
-		fmt.Println("build teardown - remove the .build project directory")
-		fmt.Println("build version - show the build version")
+		fmt.Println("Usage: build <subcommand>")
+		fmt.Println()
+		fmt.Println("Commands:")
+		commands := []struct {
+			name string
+			desc string
+		}{
+			{"help", "show this help"},
+			{"start", "start the router service"},
+			{"status", "show router status"},
+			{"seed", "seed the database with test data"},
+			{"design", "start a new design interaction"},
+			{"ingest", "ingest breakdown output"},
+			{"init", "initialize the project"},
+			{"teardown", "remove the .build project directory"},
+			{"version", "show the build version"},
+		}
+		for _, c := range commands {
+			fmt.Printf("  \x1b[33m%-15s\x1b[0m %s\n", c.name, c.desc)
+		}
 	case "start":
 		runRouter()
 	case "status":
