@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"embed"
 	"fmt"
 	"os"
@@ -15,7 +16,7 @@ import (
 	"github.com/jefflunt/build/pkg/version"
 )
 
-//go:embed templates/designer.md
+//go:embed templates/build-designer.md
 var designerInstructions embed.FS
 
 func main() {
@@ -136,24 +137,13 @@ func startDesigner() {
 	sessionDir := fmt.Sprintf(".build/designs/%d", sessionID)
 	os.MkdirAll(sessionDir, 0755)
 
-	// Properly configure opencode agent
-	agentDir := ".opencode/agents"
-	os.MkdirAll(agentDir, 0755)
-	agentFile := filepath.Join(agentDir, "designer.md")
-	data, err := designerInstructions.ReadFile("templates/designer.md")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading instructions: %v\n", err)
-		os.Exit(1)
-	}
-	os.WriteFile(agentFile, data, 0644)
-
 	fmt.Printf("--- Starting Design Session: %d ---\n", sessionID)
 	fmt.Printf("Design session ready at %s/design.md\n", sessionDir)
 
 	// 2. Run opencode
-	// Launch the interactive TUI. 
-	// The agent 'designer' is pre-configured in .opencode/agents/designer.md
-	// and will be available in the TUI session.
+	// Launch the interactive TUI.
+	// The agent 'build-designer' is pre-configured in .opencode/agents/build-designer.md
+	// and will be available for selection in the TUI session.
 	cmd := exec.Command("opencode", ".")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -163,6 +153,7 @@ func startDesigner() {
 		fmt.Fprintf(os.Stderr, "Designer session exited with error: %v\n", err)
 		os.Exit(1)
 	}
+
 
 
 	// 3. Post-session: breakdown + ingest
@@ -202,7 +193,37 @@ func initProject() {
 		fmt.Fprintf(os.Stderr, "Failed to seed Owner: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Setup designer agent in ~/.config/opencode/agents/
+	home, _ := os.UserHomeDir()
+	agentDir := filepath.Join(home, ".config/opencode/agents")
+	os.MkdirAll(agentDir, 0755)
+	agentFile := filepath.Join(agentDir, "build-designer.md")
+
+	if _, err := os.Stat(agentFile); err == nil {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Printf("Agent 'build-designer' already exists at %s. Overwrite? [y/N]: ", agentFile)
+		response, _ := reader.ReadString('\n')
+		if strings.TrimSpace(strings.ToLower(response)) != "y" {
+			fmt.Println("Skipping agent installation.")
+		} else {
+			writeAgentFile(agentFile)
+		}
+	} else {
+		writeAgentFile(agentFile)
+	}
+
 	fmt.Println("Project initialized in .build/")
+}
+
+func writeAgentFile(path string) {
+	data, err := designerInstructions.ReadFile("templates/build-designer.md")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading instructions: %v\n", err)
+		os.Exit(1)
+	}
+	os.WriteFile(path, data, 0644)
+	fmt.Printf("Agent 'build-designer' installed to %s\n", path)
 }
 
 func teardownProject() {
