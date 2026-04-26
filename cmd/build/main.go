@@ -155,10 +155,10 @@ func startDesigner() {
 	fmt.Printf("Design session ready at %s/design.md\n", sessionDir)
 
 	// 2. Run opencode
-	// Launch the interactive TUI with the build-designer agent.
-	// We inject the session directory as an environment variable so the agent knows where to save.
-	cmd := exec.Command("opencode", "run", "--agent", "build-designer", ".")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("BUILD_SESSION_DIR=%s", sessionDir))
+	// Launch the interactive TUI.
+	// The agent 'build-designer' is pre-configured in .opencode/agents/build-designer.md
+	// and will be available for selection in the TUI session.
+	cmd := exec.Command("opencode", ".")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -167,6 +167,7 @@ func startDesigner() {
 		fmt.Fprintf(os.Stderr, "Designer session exited with error: %v\n", err)
 		os.Exit(1)
 	}
+
 
 
 
