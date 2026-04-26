@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+
+# Ensure we're in the root of the project
+cd "$(dirname "$0")/.."
+
+# Calculate build metadata
+count=$(git rev-list --count HEAD 2>/dev/null || echo "0")
+arch=$(go env GOARCH 2>/dev/null || echo "unknown")
+dirty=$(git status --porcelain 2>/dev/null)
+
+if [ -n "$dirty" ]; then
+    count=$((count + 1))
+fi
+
+version="b${count}-${arch}"
+if [ -n "$dirty" ]; then
+    version="${version}-dev"
+fi
+
+echo "Installing version: ${version}"
+echo "Installing build to $(go env GOPATH)/bin..."
+go install -ldflags "-X github.com/jefflunt/build/pkg/version.Version=${version}" "./cmd/build"
+
+echo "Installation complete!"
+echo "Make sure $(go env GOPATH)/bin is in your PATH."

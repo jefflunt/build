@@ -1,0 +1,30 @@
+#!/bin/bash
+set -e
+
+# Ensure we're in the root of the project
+cd "$(dirname "$0")/.."
+
+# Calculate build metadata
+count=$(git rev-list --count HEAD 2>/dev/null || echo "0")
+arch=$(go env GOARCH 2>/dev/null || echo "unknown")
+dirty=$(git status --porcelain 2>/dev/null)
+
+# Increment count if dirty
+if [ -n "$dirty" ]; then
+    count=$((count + 1))
+fi
+
+# Determine version string
+version="b${count}-${arch}"
+if [ -n "$dirty" ]; then
+    version="${version}-dev"
+fi
+
+echo "Building version: ${version}"
+
+mkdir -p bin
+
+echo "Building build..."
+go build -ldflags "-X github.com/jefflunt/build/pkg/version.Version=${version}" -o "bin/build" "./cmd/build"
+
+echo "Build complete. Binary is at bin/build."

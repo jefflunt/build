@@ -10,6 +10,7 @@ import (
 
 	"github.com/jefflunt/build/internal/db"
 	"github.com/jefflunt/build/internal/router"
+	"github.com/jefflunt/build/pkg/version"
 )
 
 func main() {
@@ -19,6 +20,9 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "version":
+		fmt.Println(version.Version)
+		os.Exit(0)
 	case "help":
 		fmt.Println("build help - show this help")
 		fmt.Println("build start - start the router service")
@@ -26,6 +30,7 @@ func main() {
 		fmt.Println("build seed - seed the database with test data")
 		fmt.Println("build new boss - start a new boss interaction")
 		fmt.Println("build init - initialize the project")
+		fmt.Println("build version - show the build version")
 	case "start":
 		runRouter()
 	case "status":
