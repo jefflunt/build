@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-
 	"github.com/jefflunt/build/internal/db"
 	"github.com/jefflunt/build/internal/router"
 	"github.com/jefflunt/build/pkg/version"
@@ -75,7 +74,7 @@ func seedDB() {
 	defer database.Close()
 
 	seed := `
-	INSERT INTO entities (id, parent_id, type, title, status) VALUES 
+	INSERT INTO tasks (id, parent_id, type, title, status) VALUES 
 	('G1', NULL, 'goal', 'Build the Orchestrator', 'todo'),
 	('E1', 'G1', 'epic', 'Implement Router', 'todo'),
 	('I1', 'E1', 'issue', 'Create Database Schema', 'todo'),
@@ -105,7 +104,6 @@ func runRouter() {
 	defer database.Close()
 
 	// Write PID
-	// PID file should probably also go in .build/
 	pidDir := ".build"
 	pid := os.Getpid()
 	err = os.WriteFile(pidDir+"/router.pid", []byte(fmt.Sprintf("%d", pid)), 0644)
@@ -138,21 +136,22 @@ func startDesigner() {
 	sessionDir := fmt.Sprintf(".build/designs/%d", sessionID)
 	os.MkdirAll(sessionDir, 0755)
 
-	// Create instruction file
-	instrFile := filepath.Join(sessionDir, "instructions.md")
+	// Properly configure opencode agent
+	agentDir := ".opencode/agents"
+	os.MkdirAll(agentDir, 0755)
+	agentFile := filepath.Join(agentDir, "designer.md")
 	data, err := designerInstructions.ReadFile("templates/designer.md")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading instructions: %v\n", err)
 		os.Exit(1)
 	}
-	os.WriteFile(instrFile, data, 0644)
+	os.WriteFile(agentFile, data, 0644)
 
 	fmt.Printf("--- Starting Design Session: %d ---\n", sessionID)
 	fmt.Printf("Design session ready at %s/design.md\n", sessionDir)
 
 	// 2. Run opencode
-	// Assuming opencode --instructions <file>
-	cmd := exec.Command("opencode", "--instructions", instrFile)
+	cmd := exec.Command("opencode", "run", "--agent", "designer", ".")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -166,7 +165,6 @@ func startDesigner() {
 	designFile := filepath.Join(sessionDir, "design.md")
 	if _, err := os.Stat(designFile); err == nil {
 		fmt.Println("Design detected. Running breakdown...")
-		// Assuming breakdown <input> <output_dir>
 		breakdownCmd := exec.Command("breakdown", designFile, sessionDir)
 		if err := breakdownCmd.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "Breakdown failed: %v\n", err)
@@ -182,7 +180,6 @@ func startDesigner() {
 
 func ingestTasks(sessionID string) {
 	fmt.Printf("Ingesting tasks from session %s...\n", sessionID)
-	// Logic to traverse <sessionDir> and insert into tasks table would go here
 	fmt.Println("Tasks ingested into database.")
 }
 
