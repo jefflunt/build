@@ -34,7 +34,11 @@ func main() {
 	case "start":
 		runRouter()
 	case "status":
-		fmt.Println("Router status: check PID file in data/router.pid")
+		if _, err := os.Stat(".build/router.pid"); os.IsNotExist(err) {
+			fmt.Println("Router status: stopped")
+		} else {
+			fmt.Println("Router status: running")
+		}
 	case "seed":
 		seedDB()
 	case "new":
@@ -52,7 +56,7 @@ func main() {
 }
 
 func seedDB() {
-	database, err := db.InitDB("data/build.db")
+	database, err := db.InitDB(".build/build.db")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to init DB: %v\n", err)
 		os.Exit(1)
@@ -75,8 +79,14 @@ func seedDB() {
 }
 
 func runRouter() {
+	// Check if initialized
+	if _, err := os.Stat(".build"); os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Error: Project not initialized. Run 'build init' first.\n")
+		os.Exit(1)
+	}
+
 	// Initialize DB
-	database, err := db.InitDB("data/build.db")
+	database, err := db.InitDB(".build/build.db")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to init DB: %v\n", err)
 		os.Exit(1)
@@ -84,13 +94,15 @@ func runRouter() {
 	defer database.Close()
 
 	// Write PID
+	// PID file should probably also go in .build/
+	pidDir := ".build"
 	pid := os.Getpid()
-	err = os.WriteFile("data/router.pid", []byte(fmt.Sprintf("%d", pid)), 0644)
+	err = os.WriteFile(pidDir+"/router.pid", []byte(fmt.Sprintf("%d", pid)), 0644)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to write PID: %v\n", err)
 		os.Exit(1)
 	}
-	defer os.Remove("data/router.pid")
+	defer os.Remove(pidDir+"/router.pid")
 
 	// Setup signal handling
 	sigChan := make(chan os.Signal, 1)
