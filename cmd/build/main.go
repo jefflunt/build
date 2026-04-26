@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"database/sql"
+	"encoding/json"
 	"embed"
 	"fmt"
 	"os"
@@ -16,6 +18,21 @@ import (
 	"github.com/jefflunt/build/internal/router"
 	"github.com/jefflunt/build/pkg/version"
 )
+
+type Node struct {
+	ID       string  `json:"id"`
+	ParentID string  `json:"parent_id,omitempty"`
+	Task     string  `json:"task"`
+	Title    string  `json:"title,omitempty"`
+	Details  string  `json:"details,omitempty"`
+	Type     string  `json:"type"`
+	Status   string  `json:"status"`
+	Children []*Node `json:"children,omitempty"`
+}
+
+type Planner struct {
+	Root *Node `json:"root"`
+}
 
 
 //go:embed templates/build-designer.md
@@ -189,8 +206,45 @@ func startDesigner() {
 }
 
 func ingestTasks(sessionID string) {
-	fmt.Printf("Ingesting tasks from session %s...\n", sessionID)
-	fmt.Println("Tasks ingested into database.")
+	sessionDir := fmt.Sprintf(".build/designs/%s", sessionID)
+	stateFile := filepath.Join(sessionDir, "state.json")
+
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to read state file: %v\n", err)
+		os.Exit(1)
+	}
+
+	var p Planner
+	if err := json.Unmarshal(data, &p); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to unmarshal state: %v\n", err)
+		os.Exit(1)
+	}
+
+	database, err := db.InitDB(".build/build.db")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to init DB: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	if p.Root != nil {
+		insertNode(database, p.Root)
+	}
+
+	fmt.Printf("Tasks from session %s ingested into database.\n", sessionID)
+}
+
+func insertNode(db *sql.DB, n *Node) {
+	query := `INSERT OR REPLACE INTO tasks (id, parent_id, type, title, description, status) VALUES (?, ?, ?, ?, ?, ?)`
+	_, err := db.Exec(query, n.ID, n.ParentID, n.Type, n.Task, n.Details, n.Status)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to insert node %s: %v\n", n.ID, err)
+	}
+
+	for _, child := range n.Children {
+		insertNode(db, child)
+	}
 }
 
 func initProject() {
