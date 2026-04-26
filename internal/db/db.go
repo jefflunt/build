@@ -12,16 +12,15 @@ func InitDB(dbPath string) (*sql.DB, error) {
 	}
 
 	schema := `
-	CREATE TABLE IF NOT EXISTS entities (
+	CREATE TABLE IF NOT EXISTS tasks (
 		id TEXT PRIMARY KEY,
 		parent_id TEXT,
 		type TEXT,
 		title TEXT,
 		description TEXT,
 		status TEXT DEFAULT 'todo',
-		assigned_agent TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		assignee_id INTEGER,
+		creator_id INTEGER,
 		touch_count INTEGER DEFAULT 0,
 		escalation_level INTEGER DEFAULT 0
 	);
@@ -32,8 +31,8 @@ func InitDB(dbPath string) (*sql.DB, error) {
 	);
 	CREATE TABLE IF NOT EXISTS audit_log (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		entity_id TEXT,
-		actor TEXT,
+		task_id TEXT,
+		actor_id INTEGER,
 		action TEXT,
 		content TEXT,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP

@@ -1,17 +1,23 @@
 package main
 
 import (
-	"bufio"
+	"embed"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
-	"strings"
+	"path/filepath"
 	"syscall"
+	"time"
+
 
 	"github.com/jefflunt/build/internal/db"
 	"github.com/jefflunt/build/internal/router"
 	"github.com/jefflunt/build/pkg/version"
 )
+
+//go:embed templates/designer.md
+var designerInstructions embed.FS
 
 func main() {
 	if len(os.Args) < 2 {
@@ -28,7 +34,7 @@ func main() {
 		fmt.Println("build start - start the router service")
 		fmt.Println("build status - show router status")
 		fmt.Println("build seed - seed the database with test data")
-		fmt.Println("build new boss - start a new boss interaction")
+		fmt.Println("build design - start a new design interaction")
 		fmt.Println("build init - initialize the project")
 		fmt.Println("build version - show the build version")
 	case "start":
@@ -41,11 +47,13 @@ func main() {
 		}
 	case "seed":
 		seedDB()
-	case "new":
-		if len(os.Args) >= 3 && os.Args[2] == "boss" {
-			startNewBoss()
+	case "design":
+		startDesigner()
+	case "ingest":
+		if len(os.Args) >= 3 {
+			ingestTasks(os.Args[2])
 		} else {
-			fmt.Println("Usage: build new boss")
+			fmt.Println("Usage: build ingest <session-id-folder>")
 		}
 	case "init":
 		initProject()
@@ -116,24 +124,63 @@ func runRouter() {
 	fmt.Println("Router stopped.")
 }
 
-func startNewBoss() {
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Println("--- New Boss Interaction: Goal Exploration ---")
-	fmt.Println("I am your Boss. Please describe the goal or problem you want to solve.")
-	fmt.Print("> ")
-	goal, _ := reader.ReadString('\n')
-	goal = strings.TrimSpace(goal)
+func startDesigner() {
+	// 1. Check for opencode
+	if _, err := exec.LookPath("opencode"); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: 'opencode' not found in PATH. Please install it first.\n")
+		os.Exit(1)
+	}
 
-	// Simulate "Grill Me"
-	fmt.Println("\n[Boss] Priming 'Grill Me' protocol...")
-	fmt.Println("[Boss] I understand the goal. Let's vet this.")
-	fmt.Println("[Boss] Challenge: Why is this goal critical right now? What happens if we don't build it?")
-	fmt.Print("> ")
-	reader.ReadString('\n') // Consume human input
+	sessionID := time.Now().UnixNano() / 1000 // Microseconds UTC
+	sessionDir := fmt.Sprintf(".build/designs/%d", sessionID)
+	os.MkdirAll(sessionDir, 0755)
 
-	fmt.Println("\n[Boss] Vetted. Now running 'breakdown' to structure the work...")
-	// Logic to call breakdown and enqueue tasks would go here
-	fmt.Println("[Boss] Breakdown complete. Tasks enqueued in the Router.")
+	// Create instruction file
+	instrFile := filepath.Join(sessionDir, "instructions.md")
+	data, err := designerInstructions.ReadFile("templates/designer.md")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading instructions: %v\n", err)
+		os.Exit(1)
+	}
+	os.WriteFile(instrFile, data, 0644)
+
+	fmt.Printf("--- Starting Design Session: %d ---\n", sessionID)
+	fmt.Printf("Design session ready at %s/design.md\n", sessionDir)
+
+	// 2. Run opencode
+	// Assuming opencode --instructions <file>
+	cmd := exec.Command("opencode", "--instructions", instrFile)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Designer session exited with error: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 3. Post-session: breakdown + ingest
+	designFile := filepath.Join(sessionDir, "design.md")
+	if _, err := os.Stat(designFile); err == nil {
+		fmt.Println("Design detected. Running breakdown...")
+		// Assuming breakdown <input> <output_dir>
+		breakdownCmd := exec.Command("breakdown", designFile, sessionDir)
+		if err := breakdownCmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "Breakdown failed: %v\n", err)
+			os.Exit(1)
+		}
+		
+		fmt.Println("Ingesting tasks...")
+		ingestTasks(fmt.Sprintf("%d", sessionID))
+	} else {
+		fmt.Println("No design.md found. Skipping breakdown/ingestion.")
+	}
+}
+
+func ingestTasks(sessionID string) {
+	fmt.Printf("Ingesting tasks from session %s...\n", sessionID)
+	// Logic to traverse <sessionDir> and insert into tasks table would go here
+	fmt.Println("Tasks ingested into database.")
 }
 
 func initProject() {

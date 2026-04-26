@@ -37,11 +37,11 @@ func (r *Router) reconcile() error {
 	// Let's use a transaction or ensure connections are closed.
 	
 	rows, err := r.db.Query(`
-		SELECT e.id, e.type, e.assigned_agent 
-		FROM entities e
-		WHERE e.status = 'todo'
+		SELECT t.id, t.type, t.assignee_id 
+		FROM tasks t
+		WHERE t.status = 'todo'
 		AND NOT EXISTS (
-			SELECT 1 FROM entities c WHERE c.parent_id = e.id AND c.status = 'todo'
+			SELECT 1 FROM tasks c WHERE c.parent_id = t.id AND c.status = 'todo'
 		)
 	`)
 	if err != nil {
@@ -56,12 +56,12 @@ func (r *Router) reconcile() error {
 	var actionable []Actionable
 	for rows.Next() {
 		var id, entityType string
-		var assignedAgent sql.NullString
-		if err := rows.Scan(&id, &entityType, &assignedAgent); err != nil {
+		var assigneeID sql.NullInt64
+		if err := rows.Scan(&id, &entityType, &assigneeID); err != nil {
 			rows.Close()
 			return err
 		}
-		if !assignedAgent.Valid || assignedAgent.String == "" {
+		if !assigneeID.Valid || assigneeID.Int64 == 0 {
 			actionable = append(actionable, Actionable{id, entityType})
 		}
 	}
@@ -69,29 +69,17 @@ func (r *Router) reconcile() error {
 
 	// 2. Assignment Engine
 	for _, a := range actionable {
-		newAgent := r.mapEntityToRole(a.entityType)
-		_, err = r.db.Exec("UPDATE entities SET assigned_agent = ? WHERE id = ?", newAgent, a.id)
+		// Just a placeholder until Agent registry is fully functional
+		// For now we set to 1 (Owner) as a fallback
+		_, err = r.db.Exec("UPDATE tasks SET assignee_id = 1 WHERE id = ?", a.id)
 		if err != nil {
 			fmt.Printf("DEBUG: Update error: %v\n", err)
 			return err
 		}
-		fmt.Printf("Assigned %s to %s\n", a.id, newAgent)
+		fmt.Printf("Assigned %s to Owner\n", a.id)
 	}
 
 	// 3. Escalation Logic
-	_, err = r.db.Exec("UPDATE entities SET touch_count = touch_count + 1 WHERE status = 'todo'")
+	_, err = r.db.Exec("UPDATE tasks SET touch_count = touch_count + 1 WHERE status = 'todo'")
 	return err
-}
-
-func (r *Router) mapEntityToRole(entityType string) string {
-	switch entityType {
-	case "task":
-		return "Dev"
-	case "issue":
-		return "Lead"
-	case "epic":
-		return "Boss"
-	default:
-		return "Deputy"
-	}
 }
