@@ -256,10 +256,16 @@ func initProject() {
 	}
 	defer database.Close()
 
-	// Seed Owner (id=1)
-	_, err = database.Exec("INSERT OR IGNORE INTO agents (id, role, name) VALUES (1, 'owner', 'Owner')")
+	// Seed initial agents: owner, dev, tester, boss
+	_, err = database.Exec(`
+		INSERT OR IGNORE INTO agents (id, role, name) VALUES 
+		(1, 'owner', 'Owner'),
+		(2, 'dev', 'Developer'),
+		(3, 'tester', 'Tester'),
+		(4, 'boss', 'Boss')
+	`)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to seed Owner: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to seed agents: %v\n", err)
 		os.Exit(1)
 	}
 
