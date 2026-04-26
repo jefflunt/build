@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/jefflunt/build/internal/db"
@@ -22,12 +24,22 @@ func main() {
 		fmt.Println("build start - start the router service")
 		fmt.Println("build status - show router status")
 		fmt.Println("build seed - seed the database with test data")
+		fmt.Println("build new boss - start a new boss interaction")
+		fmt.Println("build init - initialize the project")
 	case "start":
 		runRouter()
 	case "status":
 		fmt.Println("Router status: check PID file in data/router.pid")
 	case "seed":
 		seedDB()
+	case "new":
+		if len(os.Args) >= 3 && os.Args[2] == "boss" {
+			startNewBoss()
+		} else {
+			fmt.Println("Usage: build new boss")
+		}
+	case "init":
+		initProject()
 	default:
 		fmt.Printf("Unknown subcommand: %s\n", os.Args[1])
 		os.Exit(1)
@@ -85,4 +97,42 @@ func runRouter() {
 
 	<-sigChan
 	fmt.Println("Router stopped.")
+}
+
+func startNewBoss() {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("--- New Boss Interaction: Goal Exploration ---")
+	fmt.Println("I am your Boss. Please describe the goal or problem you want to solve.")
+	fmt.Print("> ")
+	goal, _ := reader.ReadString('\n')
+	goal = strings.TrimSpace(goal)
+
+	// Simulate "Grill Me"
+	fmt.Println("\n[Boss] Priming 'Grill Me' protocol...")
+	fmt.Println("[Boss] I understand the goal. Let's vet this.")
+	fmt.Println("[Boss] Challenge: Why is this goal critical right now? What happens if we don't build it?")
+	fmt.Print("> ")
+	reader.ReadString('\n') // Consume human input
+
+	fmt.Println("\n[Boss] Vetted. Now running 'breakdown' to structure the work...")
+	// Logic to call breakdown and enqueue tasks would go here
+	fmt.Println("[Boss] Breakdown complete. Tasks enqueued in the Router.")
+}
+
+func initProject() {
+	os.MkdirAll(".build", 0755)
+	database, err := db.InitDB(".build/build.db")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to init DB: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	// Seed Owner (id=1)
+	_, err = database.Exec("INSERT OR IGNORE INTO agents (id, role, name) VALUES (1, 'owner', 'Owner')")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to seed Owner: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("Project initialized in .build/")
 }

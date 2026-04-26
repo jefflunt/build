@@ -25,6 +25,11 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		touch_count INTEGER DEFAULT 0,
 		escalation_level INTEGER DEFAULT 0
 	);
+	CREATE TABLE IF NOT EXISTS agents (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		role TEXT,
+		name TEXT
+	);
 	CREATE TABLE IF NOT EXISTS audit_log (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		entity_id TEXT,
