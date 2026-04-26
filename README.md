@@ -7,13 +7,7 @@ We adhere to a standard script-based workflow in the `/script` directory. To pre
 
 ```bash
 # Build the binary
-./script/build
-
-# Run the test suite
-./script/test
-
-# Install to your local path
-./script/install
+./script/build-test-install
 ```
 
 ## 2. Initialization (`build init`)
@@ -27,10 +21,12 @@ build init
 The entry point for all new work is a conversation with a `Boss` agent.
 
 1.  **Spawn a Boss**:
-    ```bash
-    build new boss
-    ```
-2.  **Interaction**: You will be prompted to describe your goal. The `Boss` will then initiate the "Grill Me" protocol to vet your requirements.
+
+```bash
+build new boss
+```
+
+2.  **Interaction**: You will be prompted to describe your goal. The `Boss` will then ask you a series of questions designed to make sure it understands what you want well enough to go break it down into its smaller steps.
 3.  **Decomposition**: Once vetted, the `Boss` uses the `breakdown` tool to generate a task tree and enqueues the work into the Router.
 
 ## 4. Monitoring Progress (`build route watch`)
