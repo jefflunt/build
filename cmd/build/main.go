@@ -36,6 +36,7 @@ func main() {
 		fmt.Println("build seed - seed the database with test data")
 		fmt.Println("build design - start a new design interaction")
 		fmt.Println("build init - initialize the project")
+		fmt.Println("build teardown - remove the .build project directory")
 		fmt.Println("build version - show the build version")
 	case "start":
 		runRouter()
@@ -57,6 +58,8 @@ func main() {
 		}
 	case "init":
 		initProject()
+	case "teardown":
+		teardownProject()
 	default:
 		fmt.Printf("Unknown subcommand: %s\n", os.Args[1])
 		os.Exit(1)
@@ -199,4 +202,18 @@ func initProject() {
 		os.Exit(1)
 	}
 	fmt.Println("Project initialized in .build/")
+}
+
+func teardownProject() {
+	if _, err := os.Stat(".build"); os.IsNotExist(err) {
+		fmt.Println("Project not initialized. Nothing to tear down.")
+		return
+	}
+	
+	err := os.RemoveAll(".build")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to remove .build directory: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("Project torn down. .build/ directory removed.")
 }
