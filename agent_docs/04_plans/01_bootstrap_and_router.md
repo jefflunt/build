@@ -24,7 +24,7 @@ Establish the foundational project structure, set up the SQLite persistence laye
 - `agents` table: 
   - `id` (INTEGER PRIMARY KEY), `role` (TEXT), `name` (TEXT).
 - `tasks` table (recursive): 
-  - `id` (INTEGER PRIMARY KEY), `parent_id` (INTEGER), `creator_id` (INTEGER - FK to agents), `assignee_id` (INTEGER - FK to agents), `title`, `description`, `status` ('todo', 'done'), `touch_count`, `escalation_level`.
+  - `id` (INTEGER PRIMARY KEY), `parent_id` (INTEGER), `agent_id` (INTEGER - FK to agents), `title`, `description`, `status` ('todo', 'done', 'failed'), `touch_count`, `approval_attempts`.
 - `audit_log`:
   - `id`, `task_id`, `actor_id` (FK to agents), `action`, `content`, `timestamp`.
 
@@ -38,20 +38,18 @@ The `Router` runs as a persistent background service, constantly reconciling the
 
 ### Reconciliation & Routing Logic
 The `Router` constantly evaluates the dependency tree:
-1.  **Dependency Check**: An entity is only 'actionable' if all children are in `status == 'done'`.
+1.  **Dependency Check**: An entity is only 'actionable' if it has no children, or all children are in `status == 'done'`. Stop completely if any task is `status == 'failed'`.
 2.  **Assignment Engine**:
-    - **Task**: Assigned to `Dev` -> `Tester` -> `Lead`.
-    - **Lead Sign-off**: Once all tasks under an issue are `done`, the Lead evaluates. 
-      - Pass: Issue -> `done`.
-      - Fail: Issue -> `todo`, assigned back to `Dev` with comments.
-    - **Escalation**:
-      - Each level (Triad, Lead, Boss, Deputy) allows **3 escalations/rejections**.
-      - If an entity is rejected for the 3rd time at a specific level, the Router automatically escalates it to the supervisor (Boss/Deputy/Owner).
-3.  **Persistence**: The `Router` tracks `touch_count` and `escalation_level` per entity to trigger the escalation logic.
+    - **Task**: Assigned linearly `Dev` -> `Tester` -> `Boss`.
+    - **Automated Tests**: Tested between Dev and Boss. Failures kick back to Dev.
+    - **Sign-off**: Boss evaluates against intent. Approve sets to `done`. Rejection kicks back to Dev via `script/comment`.
+3.  **Escalation**:
+    - If a task is kicked back (fails tests or Boss rejects) 3 times (`approval_attempts >= 3`), the Router transitions it to `failed`.
+    - At this point, the human Owner must intervene, leave comments, and run `script/try_again <task-id>` to restart the cycle.
 
 ## 4. Work Delegation Hierarchy
-- Owner (Goal) -> Deputy (Epic) -> Boss (Issue) -> Lead (Task).
-- **Integrity Rule**: Instructions flow down. No agent can alter inherited instructions.
+- Human Owner -> Boss -> Tester/Dev.
+- **Integrity Rule**: Instructions flow down. No agent can alter inherited instructions. They can only append to the task history via `script/comment`.
 - **Bi-directional Flow**:
   - Breakdown: Instructions flow down.
   - Completion/Escalation: Feedback (pass/fail/clarification) flows up.
@@ -65,4 +63,4 @@ The `Router` constantly evaluates the dependency tree:
     - Grey: `todo` with children.
     - Yellow: `todo` ready (leaf node or dependencies done).
     - Purple: `assigned` (active).
-    - Light Blue: `escalation_level > 0`.
+    - Red: `failed` (Requires human intervention).

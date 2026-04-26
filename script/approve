@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -e
+
+if [ -z "$1" ]; then
+    echo "Usage: script/approve <task-id> [comments...]"
+    exit 1
+fi
+
+TASK_ID=$1
+shift
+COMMENTS="$*"
+
+if [ ! -f ".build/build.db" ]; then
+    echo "Error: .build/build.db not found. Are you at the project root?"
+    exit 1
+fi
+
+# Update the task status to 'done'
+sqlite3 .build/build.db "UPDATE tasks SET status='done' WHERE id='$TASK_ID';"
+
+if [ -n "$COMMENTS" ]; then
+    # Log the approval in the audit_log (actor_id 4 is Boss)
+    sqlite3 .build/build.db "INSERT INTO audit_log (task_id, actor_id, action, content) VALUES ('$TASK_ID', 4, 'approve', '$COMMENTS');"
+fi
+
+echo "Task $TASK_ID approved and marked as done."

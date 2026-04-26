@@ -19,10 +19,9 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		title TEXT,
 		description TEXT,
 		status TEXT DEFAULT 'todo',
-		assignee_id INTEGER,
-		creator_id INTEGER,
+		agent_id INTEGER,
 		touch_count INTEGER DEFAULT 0,
-		escalation_level INTEGER DEFAULT 0
+		approval_attempts INTEGER DEFAULT 0
 	);
 	CREATE TABLE IF NOT EXISTS agents (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,6 +33,13 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		task_id TEXT,
 		actor_id INTEGER,
 		action TEXT,
+		content TEXT,
+		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE IF NOT EXISTS comments (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_id TEXT,
+		agent_id INTEGER,
 		content TEXT,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 	);

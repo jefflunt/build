@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -e
+
+if [ -z "$1" ]; then
+    echo "Usage: script/context <task-id>"
+    exit 1
+fi
+
+TASK_ID=$1
+DB=".build/build.db"
+
+if [ ! -f "$DB" ]; then
+    echo "Error: $DB not found."
+    exit 1
+fi
+
+echo "========================================"
+echo "TASK CONTEXT: $TASK_ID"
+echo "========================================"
+sqlite3 "$DB" -line "SELECT title AS Title, description AS Description FROM tasks WHERE id='$TASK_ID';"
+
+echo ""
+echo "========================================"
+echo "COMMENTS HISTORY"
+echo "========================================"
+sqlite3 "$DB" "SELECT a.role || ': ' || c.content || CHAR(10) || '----------------------------------------' FROM comments c JOIN agents a ON c.agent_id = a.id WHERE c.task_id = '$TASK_ID' ORDER BY c.id ASC;"

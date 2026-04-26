@@ -32,26 +32,20 @@ The entry point for all new work is a design session.
     build ingest <session-id>
     ```
 
-## 4. Monitoring Progress (`build route watch`)
-To observe the work as it progresses, use the TUI dashboard.
+## 4. Monitoring Progress
+To observe the work as it progresses, start the router service in the background:
 
 ```bash
-# Start the Router in the background first
+# Start the Router in the background
 build start
 
-# Open the dashboard
-build route watch
+# Show router status
+build status
 ```
 
-### Dashboard Color Coding
-- **Green**: `done`
-- **Grey**: `todo` (Parent with incomplete children)
-- **Yellow**: `todo` (Ready to be worked on/signed off)
-- **Purple**: Active (`assigned` to an agent)
-- **Light Blue**: Escalated (`escalation_level > 0`)
+The Router handles moving tasks through the `Dev` -> `Tester` -> `Boss` workflow automatically.
 
 ## 5. Escalation and Sign-off
-You are shielded from the day-to-day work. The system handles 3-strike deadlocks automatically via the `Router`. You only interact with `Boss-X` agents directly when:
-1. You are delegating new work (`build design`).
-2. A `Boss-X` requires clarification on high-level strategy that they cannot resolve themselves.
-3. The project goal is complete and ready for your final sign-off.
+You are shielded from the day-to-day work. The system handles retries and deadlocks automatically via the `Router`. You only interact with the system when:
+1. You are delegating new work (`build design` & `build ingest`).
+2. A task reaches `approval_attempts >= 3` and transitions to the `failed` state. When this happens, the Router halts and assigns the task to the `Owner` (you) so you can review the comments, offer feedback via `script/comment`, and run `script/try_again <task-id>` to restart the workflow.
