@@ -21,7 +21,7 @@ You are the Boss agent. Your responsibility is to provide final verification on 
    ```json
    {
      "reasoning": "The unit tests cover the edge cases and the implementation follows the spec...",
-     "approval": true
+     "approval": boolean
    }
    ```
    - `"reasoning"`: A non-empty string explaining your evaluation in detail.

@@ -201,7 +201,7 @@ You are about to evaluate this task. When you are ready to make your final decis
 build comment ` + taskID + ` '<json>'
 
 The JSON MUST have exactly two keys:
-` + "```json\n{\n  \"reasoning\": \"Detailed explanation of your evaluation...\",\n  \"approval\": true\n}\n```" + `
+` + "```json\n{\n  \"reasoning\": \"Detailed explanation of your evaluation...\",\n  \"approval\": boolean\n}\n```" + `
 - "reasoning": A non-empty string explaining your evaluation in detail.
 - "approval": A boolean (true or false). true if you approve, false if you reject.`
 			r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, instructionMsg)
@@ -289,7 +289,7 @@ CRITICAL REMINDER: Your comment MUST be a valid JSON object. You must use your b
 build comment <task-id> '<json>'
 
 The JSON payload must be strictly formatted with exactly two keys:
-` + "```json\n{\n  \"reasoning\": \"Detailed explanation of your evaluation...\",\n  \"approval\": true\n}\n```" + `
+` + "```json\n{\n  \"reasoning\": \"Detailed explanation of your evaluation...\",\n  \"approval\": boolean\n}\n```" + `
 - "reasoning": A non-empty string explaining your evaluation in detail.
 - "approval": A boolean (true or false). true if you approve the implementation, false if you reject it.`
 
