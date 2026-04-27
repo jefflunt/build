@@ -75,7 +75,15 @@ func (r *Router) reconcile() error {
 
 	err = row.Scan(&id, &title, &description, &assigneeID)
 	if err == sql.ErrNoRows {
-		if r.lastPrintedState != "idle" {
+		// Check if any todo tasks exist
+		var todoCount int
+		err := r.db.QueryRow("SELECT COUNT(*) FROM tasks WHERE status = 'todo'").Scan(&todoCount)
+		if err == nil && todoCount == 0 {
+			if r.lastPrintedState != "all_finished" {
+				fmt.Println("All current items have been finished")
+				r.lastPrintedState = "all_finished"
+			}
+		} else if r.lastPrintedState != "idle" {
 			r.lastPrintedState = "idle"
 		}
 		return nil // Nothing to do
@@ -335,7 +343,7 @@ func (r *Router) printTree(activeID string, activeAssignee int, failedID string)
 		suffix := ""
 
 		if status == "done" {
-			prefix = "\033[32m" // Dark/Standard Green
+			prefix = "\033[90m" // Medium Grey
 		} else if failedID != "" && id == failedID {
 			prefix = "\033[91m" // Light Red
 		} else if id == activeID {
