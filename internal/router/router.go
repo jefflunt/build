@@ -30,8 +30,7 @@ func NewRouter(db *sql.DB, provider, model string) *Router {
 // Run starts the persistent reconciliation loop.
 func (r *Router) Run() error {
 	fmt.Println("Router service started...")
-	ticker := time.NewTicker(5 * time.Second)
-	for range ticker.C {
+	for {
 		if err := r.reconcile(); err != nil {
 			fmt.Printf("Error reconciling: %v\n", err)
 		}
