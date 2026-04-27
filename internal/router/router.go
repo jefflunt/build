@@ -326,7 +326,7 @@ The JSON payload must be strictly formatted with exactly two keys:
 
 	r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, fullMsg)
 	r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds, opencode_agent) VALUES (?, 1, 'boss_signoff_failure', ?, ?, ?, ?, 0, 'plan')", taskID, r.provider, r.model, instructionsSHA256, version.Version)
-	r.db.Exec("UPDATE tasks SET agent_id = 4, approval_attempts = ? WHERE id = ?", taskID, attempts)
+	r.db.Exec("UPDATE tasks SET agent_id = 4, approval_attempts = ? WHERE id = ?", attempts, taskID)
 	r.lastPrintedState = fmt.Sprintf("active:%s:4", taskID)
 	r.printTree(taskID, 4, "")
 }
