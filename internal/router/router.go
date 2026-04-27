@@ -160,12 +160,16 @@ func (r *Router) handlePostSession(taskID string, assigneeID int) {
 
 	if status == "done" {
 		fmt.Printf("Task %s is marked done.\n", taskID)
+		r.lastPrintedState = "done:" + taskID
+		r.printTree("", 0, "")
 		return
 	}
 
 	switch assigneeID {
 	case 2: // Dev finished -> Hand off to Tester
 		r.db.Exec("UPDATE tasks SET agent_id = 3 WHERE id = ?", taskID)
+		r.lastPrintedState = fmt.Sprintf("active:%s:3", taskID)
+		r.printTree(taskID, 3, "")
 	case 3: // Tester finished -> Run tests
 		fmt.Println("Running test suite...")
 		testCmd := exec.Command("script/test")
@@ -180,20 +184,30 @@ func (r *Router) handlePostSession(taskID string, assigneeID int) {
 			attempts++
 			if attempts >= 3 {
 				r.db.Exec("UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = ? WHERE id = ?", attempts, taskID)
+				r.lastPrintedState = "failed:" + taskID
+				r.printTree("", 0, taskID)
 			} else {
 				r.db.Exec("UPDATE tasks SET agent_id = 2, approval_attempts = ? WHERE id = ?", attempts, taskID)
+				r.lastPrintedState = fmt.Sprintf("active:%s:2", taskID)
+				r.printTree(taskID, 2, "")
 			}
 		} else {
 			fmt.Println("Tests passed. Handing off to Boss.")
 			r.db.Exec("UPDATE tasks SET agent_id = 4 WHERE id = ?", taskID)
+			r.lastPrintedState = fmt.Sprintf("active:%s:4", taskID)
+			r.printTree(taskID, 4, "")
 		}
 	case 4: // Boss finished but task is still 'todo' (Disapproved)
 		fmt.Printf("Boss exited without approving. Kicking back to Dev.\n")
 		attempts++
 		if attempts >= 3 {
 			r.db.Exec("UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = ? WHERE id = ?", attempts, taskID)
+			r.lastPrintedState = "failed:" + taskID
+			r.printTree("", 0, taskID)
 		} else {
 			r.db.Exec("UPDATE tasks SET agent_id = 2, approval_attempts = ? WHERE id = ?", attempts, taskID)
+			r.lastPrintedState = fmt.Sprintf("active:%s:2", taskID)
+			r.printTree(taskID, 2, "")
 		}
 	}
 }
@@ -231,7 +245,9 @@ func (r *Router) printTree(activeID string, activeAssignee int, failedID string)
 		prefix := ""
 		suffix := ""
 
-		if failedID != "" && id == failedID {
+		if status == "done" {
+			prefix = "\033[32m" // Dark/Standard Green
+		} else if failedID != "" && id == failedID {
 			prefix = "\033[91m" // Light Red
 		} else if id == activeID {
 			switch activeAssignee {
@@ -240,7 +256,7 @@ func (r *Router) printTree(activeID string, activeAssignee int, failedID string)
 			case 3:
 				prefix = "\033[93m" // Light Yellow
 			case 4:
-				prefix = "\033[32m" // Green
+				prefix = "\033[92m" // Light Green
 			}
 		}
 
