@@ -107,14 +107,10 @@ func main() {
 		addComment(os.Args[2], strings.Join(os.Args[3:], " "))
 	case "approve":
 		if len(os.Args) < 3 {
-			fmt.Println("Usage: build approve <task-id> [comments...]")
+			fmt.Println("Usage: build approve <task-id>")
 			os.Exit(1)
 		}
-		comments := ""
-		if len(os.Args) > 3 {
-			comments = strings.Join(os.Args[3:], " ")
-		}
-		approveTask(os.Args[2], comments)
+		approveTask(os.Args[2])
 	case "try_again":
 		if len(os.Args) < 3 {
 			fmt.Println("Usage: build try_again <task-id>")
@@ -494,7 +490,7 @@ func addComment(taskID, comment string) {
 	}
 }
 
-func approveTask(taskID, comments string) {
+func approveTask(taskID string) {
 	database, err := db.InitDB(".build/build.db")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: .build/build.db not found or failed to init: %v\n", err)
@@ -502,15 +498,17 @@ func approveTask(taskID, comments string) {
 	}
 	defer database.Close()
 
+	// 1. Mark task as done
 	_, err = database.Exec("UPDATE tasks SET status='done' WHERE id = ?", taskID)
-	if err == nil && comments != "" {
-		database.Exec("INSERT INTO audit_log (task_id, actor_id, action, content) VALUES (?, 4, 'approve', ?)", taskID, comments)
-	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error approving task: %v\n", err)
-	} else {
-		fmt.Printf("Task %s approved and marked as done.\n", taskID)
+		return
 	}
+
+	// 2. Add an audit log entry
+	database.Exec("INSERT INTO audit_log (task_id, actor_id, action, content) VALUES (?, 4, 'approve', 'Task approved')", taskID)
+	
+	fmt.Printf("Task %s approved and marked as done.\n", taskID)
 }
 
 func tryAgain(taskID string) {
