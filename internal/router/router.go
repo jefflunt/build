@@ -143,9 +143,25 @@ func (r *Router) processTask(taskID, title, description string, assigneeID int) 
 		return
 	}
 
+	// Fetch comments history
+	rows, err := r.db.Query("SELECT a.role, c.content FROM comments c JOIN agents a ON c.agent_id = a.id WHERE c.task_id = ? ORDER BY c.id ASC", taskID)
+	var commentsHistory string
+	if err == nil {
+		for rows.Next() {
+			var role, content string
+			rows.Scan(&role, &content)
+			commentsHistory += fmt.Sprintf("%s: %s\n----------------------------------------\n", role, content)
+		}
+		rows.Close()
+	}
+
+	if commentsHistory == "" {
+		commentsHistory = "(No comments yet)"
+	}
+
 	// Combine instructions
 	agentBytes, _ := os.ReadFile(roleFile)
-	contextContent := fmt.Sprintf("\n\n---\n### YOUR CURRENT ASSIGNMENT\nTask ID: %s\n\nPlease run `build context %s` to retrieve the task description and comments history before you begin.\n", taskID, taskID)
+	contextContent := fmt.Sprintf("\n\n---\n### YOUR CURRENT ASSIGNMENT\nTask ID: %s\nTitle: %s\nDescription: %s\n\n### COMMENTS HISTORY\n%s\n", taskID, title, description, commentsHistory)
 	
 	fullInstructions := string(agentBytes) + contextContent
 	
@@ -319,11 +335,20 @@ func (r *Router) kickBackToBoss(taskID string, errMsg string, instructionsSHA256
 
 	fullMsg := errMsg + `
 
-CRITICAL REMINDER: Your comment MUST be a valid JSON object. You must use your bash/shell tool to execute exactly:
-build comment <task-id> '<json>'
+CRITICAL REMINDER: Your comment MUST be a valid JSON object. To safely handle quotes, use a HEREDOC to execute exactly:
+
+```bash
+JSON_PAYLOAD=$(cat <<'EOF'
+{
+  "reasoning": "Detailed explanation of your evaluation...",
+  "approval": boolean
+}
+EOF
+)
+build comment ` + taskID + ` "$JSON_PAYLOAD"
+```
 
 The JSON payload must be strictly formatted with exactly two keys:
-` + "```json\n{\n  \"reasoning\": \"Detailed explanation of your evaluation...\",\n  \"approval\": boolean\n}\n```" + `
 - "reasoning": A non-empty string explaining your evaluation in detail.
 - "approval": A boolean (true or false). true if you approve, false if you reject.`
 
