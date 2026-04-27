@@ -343,7 +343,7 @@ func (r *Router) printTree(activeID string, activeAssignee int, failedID string)
 		FROM tasks t
 		JOIN task_tree tt ON t.parent_id = tt.id
 	)
-	SELECT id, title, type, status, depth
+	SELECT id, title, status, depth
 	FROM task_tree
 	ORDER BY sort_path ASC;
 	`
@@ -356,9 +356,9 @@ func (r *Router) printTree(activeID string, activeAssignee int, failedID string)
 
 	fmt.Println("\n======================== TASK TREE ========================")
 	for rows.Next() {
-		var id, title, taskType, status string
+		var id, title, status string
 		var depth int
-		if err := rows.Scan(&id, &title, &taskType, &status, &depth); err != nil {
+		if err := rows.Scan(&id, &title, &status, &depth); err != nil {
 			continue
 		}
 
@@ -385,7 +385,7 @@ func (r *Router) printTree(activeID string, activeAssignee int, failedID string)
 		}
 
 		indent := strings.Repeat("    ", depth)
-		fmt.Printf("%s%s- [%s] %s: %s (%s)%s\n", prefix, indent, taskType, id, title, status, suffix)
+		fmt.Printf("%s%s- %s: %s (%s)%s\n", prefix, indent, id, title, status, suffix)
 	}
 	fmt.Println("===========================================================")
 }
