@@ -11,6 +11,10 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		return nil, err
 	}
 
+	// Add opencode_agent column if it doesn't exist
+	_, err = db.Exec("ALTER TABLE audit_logs ADD COLUMN opencode_agent TEXT")
+	// Ignoring error in case column already exists
+	
 	schema := `
 	CREATE TABLE IF NOT EXISTS tasks (
 		id TEXT PRIMARY KEY,
@@ -38,6 +42,7 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		llm_instructions_sha256 TEXT,
 		build_version TEXT,
 		duration_seconds INTEGER,
+		opencode_agent TEXT,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS comments (
