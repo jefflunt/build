@@ -248,7 +248,14 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 			fmt.Println("Tests passed. Handing off to Boss.")
 			
 			// Concise instruction for the Boss
-			instructionMsg := "**CRITICAL**: please review task " + taskID + " and provide your feedback using the `build review` command. DO NOT ask questions; provide ONLY the final review."
+			instructionMsg := "**CRITICAL**: Please review task " + taskID + " and provide your feedback using the `build review` command.\n\n" +
+				"The syntax is:\n" +
+				"build review " + taskID + " <approve|reject> \"<reasoning>\"\n\n" +
+				"RULES:\n" +
+				"1. Your reasoning MUST be a single line of text.\n" +
+				"2. Enclose your reasoning in double quotes (\").\n" +
+				"3. DO NOT use double quotes inside your reasoning string (use single quotes instead).\n" +
+				"4. DO NOT ask questions; provide ONLY the final review via the bash tool."
 			r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, instructionMsg)
 
 			r.db.Exec("UPDATE tasks SET agent_id = 4 WHERE id = ?", taskID)
@@ -346,6 +353,11 @@ CRITICAL REMINDER: You must use your bash/shell tool to execute the 'build revie
 
 The syntax is:
 build review ` + taskID + ` <approve|reject> "<reasoning>"
+
+RULES:
+1. Your reasoning MUST be a single line of text.
+2. Enclose your reasoning in double quotes (").
+3. DO NOT use double quotes inside your reasoning string (use single quotes instead).
 
 Example:
 build review ` + taskID + ` approve "The code looks good and tests pass."`
