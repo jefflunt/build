@@ -395,7 +395,7 @@ func initProject() {
 	agentDir := filepath.Join(home, ".config/opencode/agents")
 	os.MkdirAll(agentDir, 0755)
 
-	agents := []string{"build-designer.md", "build-boss.md"}
+	agents := []string{"build-designer.md"}
 	for _, agent := range agents {
 		agentFile := filepath.Join(agentDir, agent)
 		if _, err := os.Stat(agentFile); err == nil {
@@ -439,41 +439,6 @@ func writeAgentFile(path string, filename string) {
 	}
 	os.WriteFile(path, data, 0644)
 	fmt.Printf("Agent '%s' installed to %s\n", filename, path)
-}
-
-	} else {
-		writeAgentFile(agentFile)
-	}
-
-	// Create default .build/test adapter script
-	writeTestAdapter(".build")
-
-	fmt.Println("Project initialized in .build/")
-}
-
-func writeTestAdapter(dir string) {
-	testScript := filepath.Join(dir, "test")
-	content := `#!/usr/bin/env bash
-# This script acts as an adapter for the build orchestrator.
-# The orchestrator will automatically run this script after a Tester agent finishes.
-# Update this file to execute your project's actual test runner (e.g., 'npm test', 'go test ./...', etc.)
-# If no tests exist yet, simply exit 0 to satisfy the automation pipeline.
-
-exit 0
-`
-	if err := os.WriteFile(testScript, []byte(content), 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create .build/test adapter: %v\n", err)
-	}
-}
-
-func writeAgentFile(path string) {
-	data, err := designerInstructions.ReadFile("templates/build-designer.md")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading instructions: %v\n", err)
-		os.Exit(1)
-	}
-	os.WriteFile(path, data, 0644)
-	fmt.Printf("Agent 'build-designer' installed to %s\n", path)
 }
 
 func printContext(taskID string) {

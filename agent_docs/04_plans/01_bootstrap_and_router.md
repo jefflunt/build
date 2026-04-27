@@ -1,7 +1,7 @@
 # Plan 01: Initial Bootstrap and Router Engine
 
 ## Goal
-Establish the foundational project structure, set up the SQLite persistence layer, and implement the persistent `Router` service.
+Establish the foundational project structure, set up the SQLite persistence layer, and implement the continuous reactive `Router` service.
 
 ## 1. Environment Setup
 - Language: **Go 1.22+**.
@@ -13,7 +13,7 @@ Establish the foundational project structure, set up the SQLite persistence laye
   ```
   /build
     /cmd/build        # Entry point
-    /internal/router  # Persistent Router engine
+    /internal/router  # Reactive Router engine
     /internal/db      # SQLite schema and access
     /internal/agents  # Base agent framework
     /script           # build, test, install
@@ -29,19 +29,20 @@ Establish the foundational project structure, set up the SQLite persistence laye
   - `id`, `task_id`, `actor_id` (FK to agents), `action`, `llm_provider`, `llm_model`, `llm_instructions_sha256`, `build_version`, `duration_seconds`, `timestamp`.
 
 ## 3. Router Service & State Machine
-The `Router` runs as a persistent background service, constantly reconciling the dependency tree.
+The `Router` runs as a continuous, serialized background service, constantly reconciling the dependency tree.
 
 ### Status Model
 - **`todo`**: Default state. Work must be done.
 - **`done`**: Terminal state. All required sign-offs are complete.
 
 ### Reconciliation & Routing Logic
-The `Router` constantly evaluates the dependency tree:
+The `Router` evaluates the dependency tree in an infinite loop:
 1.  **Dependency Check**: An entity is only 'actionable' if it has no children, or all children are in `status == 'done'`. Stop completely if any task is `status == 'failed'`.
 2.  **Assignment Engine**:
     - **Task**: Assigned linearly `Dev` -> `Tester` -> `Boss`.
+    - **Context Injection**: The Router fetches the task details and comments history and injects it directly into the agent's prompt to avoid blind execution loops.
     - **Automated Tests**: Tested between Dev and Boss. Failures kick back to Dev.
-    - **Sign-off**: Boss evaluates against intent. Approve sets to `done`. Rejection kicks back to Dev via `build comment`.
+    - **Sign-off**: Boss evaluates against intent using a JSON HEREDOC via `build comment`. Approve sets to `done`. Rejection kicks back to Dev via `build comment`.
 3. **Escalation**:
     - If a task is kicked back (fails tests or Boss rejects) 3 times (`approval_attempts >= 3`), the Router transitions it to `failed`.
     - At this point, the human Owner must intervene, leave comments, and run `build try_again <task-id>` to restart the cycle.

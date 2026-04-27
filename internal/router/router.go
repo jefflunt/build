@@ -138,7 +138,7 @@ func (r *Router) processTask(taskID, title, description string, assigneeID int) 
 		agentName = "build"
 	case 4:
 		roleFile = "cmd/build/templates/boss.md"
-		agentName = "build-boss"
+		agentName = "build"
 	default:
 		return
 	}
@@ -181,10 +181,10 @@ func (r *Router) processTask(taskID, title, description string, assigneeID int) 
 	cmd.Stderr = os.Stderr
 	
 	startTime := time.Now()
-	err := cmd.Run()
+	runErr := cmd.Run()
 	duration := int(time.Since(startTime).Seconds())
-	if err != nil {
-		fmt.Printf("opencode session ended with error: %v\n", err)
+	if runErr != nil {
+		fmt.Printf("opencode session ended with error: %v\n", runErr)
 	}
 
 	// Post-session logic
@@ -195,7 +195,10 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 	// Re-check status in case the agent (like Boss) changed it to 'done'
 	var status string
 	var attempts int
-	r.db.QueryRow("SELECT status, approval_attempts FROM tasks WHERE id = ?", taskID).Scan(&status, &attempts)
+	err := r.db.QueryRow("SELECT status, approval_attempts FROM tasks WHERE id = ?", taskID).Scan(&status, &attempts)
+	if err != nil {
+		fmt.Printf("Error checking task status: %v\n", err)
+	}
 
 	if status == "done" {
 		fmt.Printf("Task %s is marked done.\n", taskID)
@@ -251,8 +254,8 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 		}
 	case 4: // Boss finished
 		var commentContent string
-		err := r.db.QueryRow("SELECT content FROM comments WHERE task_id = ? AND agent_id = 4 ORDER BY id DESC LIMIT 1", taskID).Scan(&commentContent)
-		if err != nil {
+		errComment := r.db.QueryRow("SELECT content FROM comments WHERE task_id = ? AND agent_id = 4 ORDER BY id DESC LIMIT 1", taskID).Scan(&commentContent)
+		if errComment != nil {
 			r.kickBackToBoss(taskID, "System Error: You exited without leaving a comment. You MUST use `build comment` to leave your JSON evaluation before exiting.", instructionsSHA256, attempts)
 			return
 		}
@@ -264,8 +267,8 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 
 		// 2. Parse JSON
 		var payload map[string]interface{}
-		err = json.Unmarshal([]byte(cleanedComment), &payload)
-		if err != nil {
+		errJson := json.Unmarshal([]byte(cleanedComment), &payload)
+		if errJson != nil {
 			r.kickBackToBoss(taskID, "System Error: Your comment was not valid JSON. Please provide exactly the required JSON format.", instructionsSHA256, attempts)
 			return
 		}
@@ -337,7 +340,7 @@ func (r *Router) kickBackToBoss(taskID string, errMsg string, instructionsSHA256
 
 CRITICAL REMINDER: Your comment MUST be a valid JSON object. To safely handle quotes, use a HEREDOC to execute exactly:
 
-```bash
+` + "```" + `bash
 JSON_PAYLOAD=$(cat <<'EOF'
 {
   "reasoning": "Detailed explanation of your evaluation...",
@@ -346,7 +349,7 @@ JSON_PAYLOAD=$(cat <<'EOF'
 EOF
 )
 build comment ` + taskID + ` "$JSON_PAYLOAD"
-```
+` + "```" + `
 
 The JSON payload must be strictly formatted with exactly two keys:
 - "reasoning": A non-empty string explaining your evaluation in detail.

@@ -43,7 +43,7 @@ build start
 build status
 ```
 
-The Router handles moving tasks through the `Dev` -> `Tester` -> `Boss` workflow automatically. It uses color-coded output:
+The Router handles moving tasks through the `Dev` -> `Tester` -> `Boss` workflow automatically via a continuous, reactive loop. It automatically provides context and comment history to the agents. It uses color-coded output:
 - **Medium Grey**: `done`
 - **Light Blue**: `active` (`assigned` to `Dev`)
 - **Light Yellow**: `active` (`assigned` to `Tester`)
@@ -53,7 +53,7 @@ The Router handles moving tasks through the `Dev` -> `Tester` -> `Boss` workflow
 ## 5. Escalation and Sign-off
 You are shielded from the day-to-day work. The system handles retries and deadlocks automatically via the `Router`. You only interact with the system when:
 1. You are delegating new work (`build design` & `build ingest`).
-2. A task reaches `approval_attempts >= 3` and transitions to the `failed` state. When this happens, the Router halts and assigns the task to the `Owner` (you) so you can review the comments via `build context <task-id>`, offer feedback via `build comment <task-id> "<comment>"`, and run `build redo <task-id>` to restart the workflow.
+2. A task reaches `approval_attempts >= 3` and transitions to the `failed` state. When this happens, the Router halts and assigns the task to the `Owner` (you) so you can manually review the context (`build context <task-id>`), offer feedback via `build comment <task-id> "<comment>"`, and run `build redo <task-id>` to restart the workflow.
 
 ## 6. Other Useful Commands
 - `build context <task-id>`: View the task description and history of comments.
