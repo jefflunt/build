@@ -506,7 +506,7 @@ func approveTask(taskID string) {
 	}
 
 	// 2. Add an audit log entry
-	database.Exec("INSERT INTO audit_log (task_id, actor_id, action, content) VALUES (?, 4, 'approve', 'Task approved')", taskID)
+	database.Exec("INSERT INTO audit_logs (task_id, actor_id, action) VALUES (?, 4, 'task_approved')", taskID)
 	
 	fmt.Printf("Task %s approved and marked as done.\n", taskID)
 }

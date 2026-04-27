@@ -25,8 +25,8 @@ Establish the foundational project structure, set up the SQLite persistence laye
   - `id` (INTEGER PRIMARY KEY), `role` (TEXT), `name` (TEXT).
 - `tasks` table (recursive): 
   - `id` (INTEGER PRIMARY KEY), `parent_id` (INTEGER), `agent_id` (INTEGER - FK to agents), `title`, `description`, `status` ('todo', 'done', 'failed'), `touch_count`, `approval_attempts`.
-- `audit_log`:
-  - `id`, `task_id`, `actor_id` (FK to agents), `action`, `content`, `timestamp`.
+- `audit_logs`:
+  - `id`, `task_id`, `actor_id` (FK to agents), `action`, `llm_provider`, `llm_model`, `timestamp`.
 
 
 ## 3. Router Service & State Machine

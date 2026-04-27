@@ -98,6 +98,7 @@ func (r *Router) reconcile() error {
 	} else {
 		// Update DB to reflect initial assignment
 		_, _ = r.db.Exec("UPDATE tasks SET agent_id = 2 WHERE id = ?", id)
+		r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action) VALUES (?, 1, 'assign_to_dev')", id)
 	}
 
 	currentState := fmt.Sprintf("active:%s:%d", id, currentAssignee)
@@ -177,6 +178,7 @@ func (r *Router) handlePostSession(taskID string, assigneeID int) {
 	switch assigneeID {
 	case 2: // Dev finished -> Hand off to Tester
 		r.db.Exec("UPDATE tasks SET agent_id = 3 WHERE id = ?", taskID)
+		r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action) VALUES (?, 1, 'assign_to_tester')", taskID)
 		r.lastPrintedState = fmt.Sprintf("active:%s:3", taskID)
 		r.printTree(taskID, 3, "")
 	case 3: // Tester finished -> Run tests
@@ -193,10 +195,12 @@ func (r *Router) handlePostSession(taskID string, assigneeID int) {
 			attempts++
 			if attempts >= 3 {
 				r.db.Exec("UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = ? WHERE id = ?", attempts, taskID)
+				r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action) VALUES (?, 1, 'task_rejected')", taskID)
 				r.lastPrintedState = "failed:" + taskID
 				r.printTree("", 0, taskID)
 			} else {
 				r.db.Exec("UPDATE tasks SET agent_id = 2, approval_attempts = ? WHERE id = ?", attempts, taskID)
+				r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action) VALUES (?, 1, 'assign_to_dev')", taskID)
 				r.lastPrintedState = fmt.Sprintf("active:%s:2", taskID)
 				r.printTree(taskID, 2, "")
 			}
@@ -215,6 +219,7 @@ The JSON MUST have exactly two keys:
 			r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, instructionMsg)
 
 			r.db.Exec("UPDATE tasks SET agent_id = 4 WHERE id = ?", taskID)
+			r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action) VALUES (?, 1, 'assign_to_boss')", taskID)
 			r.lastPrintedState = fmt.Sprintf("active:%s:4", taskID)
 			r.printTree(taskID, 4, "")
 		}
@@ -270,17 +275,20 @@ The JSON MUST have exactly two keys:
 		if approvalBool {
 			fmt.Printf("Boss approved task %s.\n", taskID)
 			r.db.Exec("UPDATE tasks SET status = 'done' WHERE id = ?", taskID)
+			r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action) VALUES (?, 1, 'task_approved')", taskID)
 			r.lastPrintedState = "done:" + taskID
 			r.printTree("", 0, "")
 		} else {
 			fmt.Printf("Boss rejected task %s. Kicking back to Dev.\n", taskID)
 			attempts++
+			r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action) VALUES (?, 1, 'task_rejected')", taskID)
 			if attempts >= 3 {
 				r.db.Exec("UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = ? WHERE id = ?", attempts, taskID)
 				r.lastPrintedState = "failed:" + taskID
 				r.printTree("", 0, taskID)
 			} else {
 				r.db.Exec("UPDATE tasks SET agent_id = 2, approval_attempts = ? WHERE id = ?", attempts, taskID)
+				r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action) VALUES (?, 1, 'assign_to_dev')", taskID)
 				r.lastPrintedState = fmt.Sprintf("active:%s:2", taskID)
 				r.printTree(taskID, 2, "")
 			}
@@ -299,7 +307,7 @@ build comment <task-id> '<json>'
 The JSON payload must be strictly formatted with exactly two keys:
 ` + "```json\n{\n  \"reasoning\": \"Detailed explanation of your evaluation...\",\n  \"approval\": boolean\n}\n```" + `
 - "reasoning": A non-empty string explaining your evaluation in detail.
-- "approval": A boolean (true or false). true if you approve the implementation, false if you reject it.`
+- "approval": A boolean (true or false). true if you approve, false if you reject.`
 
 	// Insert system error comment
 	r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, fullMsg)
@@ -366,6 +374,3 @@ func (r *Router) printTree(activeID string, activeAssignee int, failedID string)
 	}
 	fmt.Println("===========================================================")
 }
-
-
-

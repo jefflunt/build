@@ -28,12 +28,13 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		role TEXT,
 		name TEXT
 	);
-	CREATE TABLE IF NOT EXISTS audit_log (
+	CREATE TABLE IF NOT EXISTS audit_logs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		task_id TEXT,
 		actor_id INTEGER,
 		action TEXT,
-		content TEXT,
+		llm_provider TEXT,
+		llm_model TEXT,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS comments (
