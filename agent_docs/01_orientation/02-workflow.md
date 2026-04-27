@@ -12,8 +12,10 @@ All actionable tasks (leaf nodes in the task tree) begin in the `todo` status an
    - **Pass**: The task is advanced to the Boss.
    - **Fail**: The Router logs the test output as a comment, increments `approval_attempts`, and kicks the task back to the Dev.
 4. **Boss Verification**: The `Boss` reviews the code and test output against the original task description.
-   - **Approve**: The Boss runs `build approve`, marking the task as `done`.
-   - **Reject**: The Boss leaves a specific comment on what needs fixing (`build comment`) and exits. The Router catches this, increments `approval_attempts`, and kicks the task back to the Dev.
+   - The Boss runs `build comment <task-id> '<json>'` to provide its decision in a strict JSON format containing `"reasoning"` and `"approval": true/false`.
+   - **Approve (`true`)**: The Router parses the JSON and marks the task as `done`.
+   - **Reject (`false`)**: The Router increments `approval_attempts` and kicks the task back to the Dev.
+   - **Format Error**: If the Boss fails to provide valid JSON, the Router catches this and kicks the task back to the Boss with a System Error explaining the mistake.
 
 ## 2. Agent Communication
 Agents are not allowed to arbitrarily edit tasks. All notes, context, feedback, and test outputs are appended to the task chronologically using `build comment <task-id> "<comment>"`. Agents retrieve this history using `build context <task-id>`.

@@ -2,6 +2,7 @@ package router
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -197,19 +198,84 @@ func (r *Router) handlePostSession(taskID string, assigneeID int) {
 			r.lastPrintedState = fmt.Sprintf("active:%s:4", taskID)
 			r.printTree(taskID, 4, "")
 		}
-	case 4: // Boss finished but task is still 'todo' (Disapproved)
-		fmt.Printf("Boss exited without approving. Kicking back to Dev.\n")
-		attempts++
-		if attempts >= 3 {
-			r.db.Exec("UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = ? WHERE id = ?", attempts, taskID)
-			r.lastPrintedState = "failed:" + taskID
-			r.printTree("", 0, taskID)
+	case 4: // Boss finished
+		// 1. Fetch the latest comment by the Boss (agent_id = 4)
+		var commentContent string
+		err := r.db.QueryRow("SELECT content FROM comments WHERE task_id = ? AND agent_id = 4 ORDER BY id DESC LIMIT 1", taskID).Scan(&commentContent)
+		if err != nil {
+			r.kickBackToBoss(taskID, "System Error: You exited without leaving a comment. You MUST use `build comment` to leave your JSON evaluation before exiting.")
+			return
+		}
+
+		// Clean potential markdown codeblocks out of the comment before parsing
+		cleanedComment := strings.ReplaceAll(commentContent, "```json", "")
+		cleanedComment = strings.ReplaceAll(cleanedComment, "```", "")
+		cleanedComment = strings.TrimSpace(cleanedComment)
+
+		// 2. Parse JSON
+		var payload map[string]interface{}
+		err = json.Unmarshal([]byte(cleanedComment), &payload)
+		if err != nil {
+			r.kickBackToBoss(taskID, "System Error: Your comment was not valid JSON. Please provide exactly the required JSON format.")
+			return
+		}
+
+		// 3. Strict schema validation
+		if len(payload) != 2 {
+			r.kickBackToBoss(taskID, "System Error: Your JSON payload must contain exactly two keys: 'reasoning' and 'approval'.")
+			return
+		}
+
+		reasoningVal, hasReasoning := payload["reasoning"]
+		approvalVal, hasApproval := payload["approval"]
+
+		if !hasReasoning || !hasApproval {
+			r.kickBackToBoss(taskID, "System Error: Missing required keys. You must provide both 'reasoning' and 'approval'.")
+			return
+		}
+
+		reasoningStr, isString := reasoningVal.(string)
+		if !isString || strings.TrimSpace(reasoningStr) == "" {
+			r.kickBackToBoss(taskID, "System Error: The 'reasoning' key must be a non-empty string.")
+			return
+		}
+
+		approvalBool, isBool := approvalVal.(bool)
+		if !isBool {
+			r.kickBackToBoss(taskID, "System Error: The 'approval' key must be a boolean (true or false).")
+			return
+		}
+
+		// 4. Route based on approval boolean
+		if approvalBool {
+			fmt.Printf("Boss approved task %s.\n", taskID)
+			r.db.Exec("UPDATE tasks SET status = 'done' WHERE id = ?", taskID)
+			r.lastPrintedState = "done:" + taskID
+			r.printTree("", 0, "")
 		} else {
-			r.db.Exec("UPDATE tasks SET agent_id = 2, approval_attempts = ? WHERE id = ?", attempts, taskID)
-			r.lastPrintedState = fmt.Sprintf("active:%s:2", taskID)
-			r.printTree(taskID, 2, "")
+			fmt.Printf("Boss rejected task %s. Kicking back to Dev.\n", taskID)
+			attempts++
+			if attempts >= 3 {
+				r.db.Exec("UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = ? WHERE id = ?", attempts, taskID)
+				r.lastPrintedState = "failed:" + taskID
+				r.printTree("", 0, taskID)
+			} else {
+				r.db.Exec("UPDATE tasks SET agent_id = 2, approval_attempts = ? WHERE id = ?", attempts, taskID)
+				r.lastPrintedState = fmt.Sprintf("active:%s:2", taskID)
+				r.printTree(taskID, 2, "")
+			}
 		}
 	}
+}
+
+func (r *Router) kickBackToBoss(taskID string, errMsg string) {
+	fmt.Printf("Boss validation failed format check. Kicking back to Boss.\n")
+	// Insert system error comment
+	r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, errMsg)
+	// Re-assign to Boss
+	r.db.Exec("UPDATE tasks SET agent_id = 4 WHERE id = ?", taskID)
+	r.lastPrintedState = fmt.Sprintf("active:%s:4", taskID)
+	r.printTree(taskID, 4, "")
 }
 
 func (r *Router) printTree(activeID string, activeAssignee int, failedID string) {
