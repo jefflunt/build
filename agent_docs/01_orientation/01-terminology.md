@@ -16,7 +16,7 @@ This document defines the core entities and architectural concepts for the `buil
 - **CLI Commands**:
     - `build init`: Initialize local `.build/` repo state.
     - `build design`: Spawn a `build-designer` agent for a new project/goal.
-    - `build ingest <session-id>`: Import breakdown output into the system database.
+    - `build ingest <path>`: Import external `breakdown` output directory into the system database.
     - `build start`: Run the `Router` service in the background.
     - `build status`: Check if the `Router` service is running.
 

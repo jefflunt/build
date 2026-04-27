@@ -26,10 +26,10 @@ The entry point for all new work is a design session.
     ```
 2.  **Interaction**: You will be prompted for your goal. An `opencode` session (using the `designer` agent) will spawn, utilizing the "Grill Me" protocol to vet your ideas.
 3.  **Decomposition**: Once the session exits and a `design.md` file is generated, the breakdown process automatically structures the work into a recursive task tree.
-4.  **Ingestion**:
+4.  **Ingestion**: You can manually ingest external breakdowns using:
     ```bash
-    # Ingest the breakdown output into the system
-    build ingest <session-id>
+    # Ingest the breakdown output into the system by pointing to its root directory
+    build ingest ~/.breakdown/output/tic-tac-toe/
     ```
 
 ## 4. Monitoring Progress
