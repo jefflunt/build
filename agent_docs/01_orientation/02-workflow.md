@@ -7,8 +7,8 @@ This document defines the deterministic rules for task management, agent interac
 All actionable tasks (leaf nodes in the task tree) begin in the `todo` status and are processed in the following linear workflow, orchestrated entirely by the `Router`:
 
 1. **Dev Assignment**: The Router assigns the task to the `Dev`. The Dev reads the context (`build context`), implements the feature/fix, and exits.
-2. **Tester Assignment**: The Router hands the task to the `Tester`. The Tester reads the context, writes unit tests targeting the Dev's code, and exits.
-3. **Automated Testing**: The Router runs the project's test suite (`script/test`). 
+2. **Tester Assignment**: The Router hands the task to the `Tester`. The Tester reads the context, writes unit tests targeting the Dev's code, and exits. (If tests were added, the Tester updates `.build/test` to trigger them; otherwise, the default `exit 0` handles the pipeline).
+3. **Automated Testing**: The Router runs the project's test suite via an adapter script (`./.build/test`).  
    - **Pass**: The task is advanced to the Boss.
    - **Fail**: The Router logs the test output as a comment, increments `approval_attempts`, and kicks the task back to the Dev.
 4. **Boss Verification**: The `Boss` reviews the code and test output against the original task description.

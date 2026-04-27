@@ -404,7 +404,25 @@ func initProject() {
 		writeAgentFile(agentFile)
 	}
 
+	// Create default .build/test adapter script
+	writeTestAdapter(".build")
+
 	fmt.Println("Project initialized in .build/")
+}
+
+func writeTestAdapter(dir string) {
+	testScript := filepath.Join(dir, "test")
+	content := `#!/usr/bin/env bash
+# This script acts as an adapter for the build orchestrator.
+# The orchestrator will automatically run this script after a Tester agent finishes.
+# Update this file to execute your project's actual test runner (e.g., 'npm test', 'go test ./...', etc.)
+# If no tests exist yet, simply exit 0 to satisfy the automation pipeline.
+
+exit 0
+`
+	if err := os.WriteFile(testScript, []byte(content), 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create .build/test adapter: %v\n", err)
+	}
 }
 
 func writeAgentFile(path string) {

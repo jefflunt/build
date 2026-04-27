@@ -172,7 +172,7 @@ func (r *Router) handlePostSession(taskID string, assigneeID int) {
 		r.printTree(taskID, 3, "")
 	case 3: // Tester finished -> Run tests
 		fmt.Println("Running test suite...")
-		testCmd := exec.Command("script/test")
+		testCmd := exec.Command("./.build/test")
 		out, err := testCmd.CombinedOutput()
 		
 		if err != nil {
