@@ -29,4 +29,4 @@ If a task fails automated testing OR Boss approval **3 times**:
 3. The Router **halts all operations** while a task is in a failed state.
 
 **Human Intervention**: 
-When a task fails, the Owner must review the context, provide explicit clarifying feedback via `build comment`, and then execute `build try_again <task-id>`. This resets the task to `todo`, resets the `approval_attempts` to 0, and assigns it back to the Dev to run through the cycle again with the new human feedback.
+When a task fails, the Owner must review the context, provide explicit clarifying feedback via `build comment`, and then execute `build redo <task-id>`. This resets the task to `todo`, resets the `approval_attempts` to 0, and assigns it back to the Dev to run through the cycle again with the new human feedback.

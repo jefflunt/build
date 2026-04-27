@@ -37,6 +37,7 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		llm_model TEXT,
 		llm_instructions_sha256 TEXT,
 		build_version TEXT,
+		duration_seconds INTEGER,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS comments (

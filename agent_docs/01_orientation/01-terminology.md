@@ -19,6 +19,10 @@ This document defines the core entities and architectural concepts for the `buil
     - `build ingest <path>`: Import external `breakdown` output directory into the system database.
     - `build start`: Run the `Router` service in the background.
     - `build status`: Check if the `Router` service is running.
+    - `build context <task-id>`: Retrieve task details and history.
+    - `build comment <task-id> "<comment>"`: Append a comment to a task.
+    - `build approve <task-id>`: Manually mark a task as `done`.
+    - `build redo <task-id>`: Reset a `failed` task for the Dev.
 
 ## 4. Hierarchy
 - **Task**: Single, recursive entity representing any unit of work. Leaf nodes (tasks without children) are the ones that are actively worked on by the agents.

@@ -67,7 +67,7 @@ func main() {
 			{"context", "view task context and comments"},
 			{"comment", "add a comment to a task"},
 			{"approve", "approve a task (boss only)"},
-			{"try_again", "reset a failed task for the dev"},
+			{"redo", "reset a failed task for the dev"},
 			{"init", "initialize the project"},
 			{"teardown", "remove the .build project directory"},
 			{"version", "show the build version"},
@@ -111,12 +111,12 @@ func main() {
 			os.Exit(1)
 		}
 		approveTask(os.Args[2])
-	case "try_again":
+	case "redo":
 		if len(os.Args) < 3 {
-			fmt.Println("Usage: build try_again <task-id>")
+			fmt.Println("Usage: build redo <task-id>")
 			os.Exit(1)
 		}
-		tryAgain(os.Args[2])
+		redoTask(os.Args[2])
 	case "init":
 		initProject()
 	case "teardown":
@@ -520,7 +520,7 @@ func approveTask(taskID string) {
 	fmt.Printf("Task %s approved and marked as done.\n", taskID)
 }
 
-func tryAgain(taskID string) {
+func redoTask(taskID string) {
 	database, err := db.InitDB(".build/build.db")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: .build/build.db not found or failed to init: %v\n", err)

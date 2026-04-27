@@ -26,8 +26,7 @@ Establish the foundational project structure, set up the SQLite persistence laye
 - `tasks` table (recursive): 
   - `id` (INTEGER PRIMARY KEY), `parent_id` (INTEGER), `agent_id` (INTEGER - FK to agents), `title`, `description`, `status` ('todo', 'done', 'failed'), `touch_count`, `approval_attempts`.
 - `audit_logs`:
-  - `id`, `task_id`, `actor_id` (FK to agents), `action`, `llm_provider`, `llm_model`, `timestamp`.
-
+  - `id`, `task_id`, `actor_id` (FK to agents), `action`, `llm_provider`, `llm_model`, `llm_instructions_sha256`, `build_version`, `duration_seconds`, `timestamp`.
 
 ## 3. Router Service & State Machine
 The `Router` runs as a persistent background service, constantly reconciling the dependency tree.
@@ -42,14 +41,14 @@ The `Router` constantly evaluates the dependency tree:
 2.  **Assignment Engine**:
     - **Task**: Assigned linearly `Dev` -> `Tester` -> `Boss`.
     - **Automated Tests**: Tested between Dev and Boss. Failures kick back to Dev.
-    - **Sign-off**: Boss evaluates against intent. Approve sets to `done`. Rejection kicks back to Dev via `script/comment`.
-3.  **Escalation**:
+    - **Sign-off**: Boss evaluates against intent. Approve sets to `done`. Rejection kicks back to Dev via `build comment`.
+3. **Escalation**:
     - If a task is kicked back (fails tests or Boss rejects) 3 times (`approval_attempts >= 3`), the Router transitions it to `failed`.
-    - At this point, the human Owner must intervene, leave comments, and run `script/try_again <task-id>` to restart the cycle.
+    - At this point, the human Owner must intervene, leave comments, and run `build try_again <task-id>` to restart the cycle.
 
 ## 4. Work Delegation Hierarchy
 - Human Owner -> Boss -> Tester/Dev.
-- **Integrity Rule**: Instructions flow down. No agent can alter inherited instructions. They can only append to the task history via `script/comment`.
+- **Integrity Rule**: Instructions flow down. No agent can alter inherited instructions. They can only append to the task history via `build comment`.
 - **Bi-directional Flow**:
   - Breakdown: Instructions flow down.
   - Completion/Escalation: Feedback (pass/fail/clarification) flows up.
