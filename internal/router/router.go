@@ -225,6 +225,10 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 		} else {
 			fmt.Println("Tests passed. Handing off to Boss.")
 			
+			// Concise instruction for the Boss
+			instructionMsg := "**CRITICAL**: please review task " + taskID + " and provide your feedback, positive or negative, in the structured JSON format specified in your instructions. DO NOT ask questions; provide ONLY the final JSON evaluation."
+			r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, instructionMsg)
+
 			r.db.Exec("UPDATE tasks SET agent_id = 4 WHERE id = ?", taskID)
 			r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds, opencode_agent) VALUES (?, 1, 'assign_to_boss', ?, ?, ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion, totalDuration, agentName)
 			r.lastPrintedState = fmt.Sprintf("active:%s:4", taskID)
