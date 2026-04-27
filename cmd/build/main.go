@@ -216,7 +216,7 @@ func runRouter() {
 		model = "gemini-3.1-flash-lite-preview"
 	}
 
-	r := router.NewRouter(database, provider, model)
+	r := router.NewRouter(database, provider, model, agentInstructions)
 	go r.Run()
 
 	<-sigChan

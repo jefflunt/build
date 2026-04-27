@@ -3,6 +3,7 @@ package router
 import (
 	"crypto/sha256"
 	"database/sql"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -20,11 +21,12 @@ type Router struct {
 	lastPrintedState string
 	provider         string
 	model            string
+	templatesFS      embed.FS
 }
 
 // NewRouter creates a new router instance.
-func NewRouter(db *sql.DB, provider, model string) *Router {
-	return &Router{db: db, provider: provider, model: model}
+func NewRouter(db *sql.DB, provider, model string, templatesFS embed.FS) *Router {
+	return &Router{db: db, provider: provider, model: model, templatesFS: templatesFS}
 }
 
 // Run starts the persistent reconciliation loop.
@@ -59,14 +61,7 @@ func (r *Router) reconcile() error {
 		return nil
 	}
 
-	// 2. Ensure we only process one task at a time (triad of 3 agents working on one task)
-	lockFile := ".build/router_working.lock"
-	if _, err := os.Stat(lockFile); err == nil {
-		// Currently processing a task
-		return nil
-	}
-
-	// 3. Find the next actionable 'todo' leaf task
+	// 2. Find the next actionable 'todo' leaf task
 	row := r.db.QueryRow(`
 		SELECT t.id, t.title, t.description, t.agent_id 
 		FROM tasks t
@@ -116,14 +111,8 @@ func (r *Router) reconcile() error {
 		r.lastPrintedState = currentState
 	}
 
-	// Acquire lock
-	os.WriteFile(lockFile, []byte(id), 0644)
-	
-	// Process the task in a goroutine
-	go func() {
-		defer os.Remove(lockFile)
-		r.processTask(id, title, description.String, currentAssignee)
-	}()
+	// Process the task synchronously
+	r.processTask(id, title, description.String, currentAssignee)
 
 	return nil
 }
@@ -135,13 +124,13 @@ func (r *Router) processTask(taskID, title, description string, assigneeID int) 
 	var agentName string
 	switch assigneeID {
 	case 2:
-		roleFile = "cmd/build/templates/dev.md"
+		roleFile = "templates/dev.md"
 		agentName = "build"
 	case 3:
-		roleFile = "cmd/build/templates/tester.md"
+		roleFile = "templates/tester.md"
 		agentName = "build"
 	case 4:
-		roleFile = "cmd/build/templates/boss.md"
+		roleFile = "templates/boss.md"
 		agentName = "build"
 	default:
 		return
@@ -164,7 +153,11 @@ func (r *Router) processTask(taskID, title, description string, assigneeID int) 
 	}
 
 	// Combine instructions
-	agentBytes, _ := os.ReadFile(roleFile)
+	agentBytes, err := r.templatesFS.ReadFile(roleFile)
+	if err != nil {
+		fmt.Printf("Error reading template %s: %v\n", roleFile, err)
+		return
+	}
 	contextContent := fmt.Sprintf("\n\n---\n### YOUR CURRENT ASSIGNMENT\nTask ID: %s\nTitle: %s\nDescription: %s\n\n### COMMENTS HISTORY\n%s\n", taskID, title, description, commentsHistory)
 	
 	fullInstructions := string(agentBytes) + contextContent
