@@ -37,8 +37,8 @@ func generateID() string {
 }
 
 
-//go:embed templates/build-designer.md
-var designerInstructions embed.FS
+//go:embed templates/*.md
+var agentInstructions embed.FS
 
 func main() {
 	if len(os.Args) < 2 {
@@ -394,17 +394,53 @@ func initProject() {
 	home, _ := os.UserHomeDir()
 	agentDir := filepath.Join(home, ".config/opencode/agents")
 	os.MkdirAll(agentDir, 0755)
-	agentFile := filepath.Join(agentDir, "build-designer.md")
 
-	if _, err := os.Stat(agentFile); err == nil {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Printf("Agent 'build-designer' already exists at %s. Overwrite? [y/N]: ", agentFile)
-		response, _ := reader.ReadString('\n')
-		if strings.TrimSpace(strings.ToLower(response)) != "y" {
-			fmt.Println("Skipping agent installation.")
-		} else {
-			writeAgentFile(agentFile)
+	agents := []string{"build-designer.md", "build-boss.md"}
+	for _, agent := range agents {
+		agentFile := filepath.Join(agentDir, agent)
+		if _, err := os.Stat(agentFile); err == nil {
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Printf("Agent '%s' already exists at %s. Overwrite? [y/N]: ", agent, agentFile)
+			response, _ := reader.ReadString('\n')
+			if strings.TrimSpace(strings.ToLower(response)) != "y" {
+				fmt.Println("Skipping agent installation.")
+				continue
+			}
 		}
+		writeAgentFile(agentFile, agent)
+	}
+
+	// Create default .build/test adapter script
+	writeTestAdapter(".build")
+
+	fmt.Println("Project initialized in .build/")
+}
+
+func writeTestAdapter(dir string) {
+	testScript := filepath.Join(dir, "test")
+	content := `#!/usr/bin/env bash
+# This script acts as an adapter for the build orchestrator.
+# The orchestrator will automatically run this script after a Tester agent finishes.
+# Update this file to execute your project's actual test runner (e.g., 'npm test', 'go test ./...', etc.)
+# If no tests exist yet, simply exit 0 to satisfy the automation pipeline.
+
+exit 0
+`
+	if err := os.WriteFile(testScript, []byte(content), 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create .build/test adapter: %v\n", err)
+	}
+}
+
+func writeAgentFile(path string, filename string) {
+	data, err := agentInstructions.ReadFile("templates/" + filename)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading instructions: %v\n", err)
+		os.Exit(1)
+	}
+	os.WriteFile(path, data, 0644)
+	fmt.Printf("Agent '%s' installed to %s\n", filename, path)
+}
+
 	} else {
 		writeAgentFile(agentFile)
 	}

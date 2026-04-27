@@ -139,7 +139,7 @@ func (r *Router) processTask(taskID, title, description string, assigneeID int) 
 		agentName = "build"
 	case 4:
 		roleFile = "cmd/build/templates/boss.md"
-		agentName = "plan"
+		agentName = "build-boss"
 	default:
 		return
 	}
