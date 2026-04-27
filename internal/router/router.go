@@ -221,6 +221,7 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 		} else {
 			fmt.Println("Tests passed. Handing off to Boss.")
 			
+			// Inject the strict JSON instructions as a system comment before handing off to the Boss
 			instructionMsg := `SYSTEM INSTRUCTION for Boss:
 You are about to evaluate this task. When you are ready to make your final decision, you MUST use the build comment tool with a strictly formatted JSON payload:
 build comment ` + taskID + ` '<json>'
@@ -240,23 +241,26 @@ The JSON MUST have exactly two keys:
 		var commentContent string
 		err := r.db.QueryRow("SELECT content FROM comments WHERE task_id = ? AND agent_id = 4 ORDER BY id DESC LIMIT 1", taskID).Scan(&commentContent)
 		if err != nil {
-			r.kickBackToBoss(taskID, "System Error: You exited without leaving a comment. You MUST use `build comment` to leave your JSON evaluation before exiting.")
+			r.kickBackToBoss(taskID, "System Error: You exited without leaving a comment. You MUST use `build comment` to leave your JSON evaluation before exiting.", instructionsSHA256)
 			return
 		}
 
+		// Clean potential markdown codeblocks out of the comment before parsing
 		cleanedComment := strings.ReplaceAll(commentContent, "```json", "")
 		cleanedComment = strings.ReplaceAll(cleanedComment, "```", "")
 		cleanedComment = strings.TrimSpace(cleanedComment)
 
+		// 2. Parse JSON
 		var payload map[string]interface{}
 		err = json.Unmarshal([]byte(cleanedComment), &payload)
 		if err != nil {
-			r.kickBackToBoss(taskID, "System Error: Your comment was not valid JSON. Please provide exactly the required JSON format.")
+			r.kickBackToBoss(taskID, "System Error: Your comment was not valid JSON. Please provide exactly the required JSON format.", instructionsSHA256)
 			return
 		}
 
+		// 3. Strict schema validation
 		if len(payload) != 2 {
-			r.kickBackToBoss(taskID, "System Error: Your JSON payload must contain exactly two keys: 'reasoning' and 'approval'.")
+			r.kickBackToBoss(taskID, "System Error: Your JSON payload must contain exactly two keys: 'reasoning' and 'approval'.", instructionsSHA256)
 			return
 		}
 
@@ -264,19 +268,19 @@ The JSON MUST have exactly two keys:
 		approvalVal, hasApproval := payload["approval"]
 
 		if !hasReasoning || !hasApproval {
-			r.kickBackToBoss(taskID, "System Error: Missing required keys. You must provide both 'reasoning' and 'approval'.")
+			r.kickBackToBoss(taskID, "System Error: Missing required keys. You must provide both 'reasoning' and 'approval'.", instructionsSHA256)
 			return
 		}
 
 		reasoningStr, isString := reasoningVal.(string)
 		if !isString || strings.TrimSpace(reasoningStr) == "" {
-			r.kickBackToBoss(taskID, "System Error: The 'reasoning' key must be a non-empty string.")
+			r.kickBackToBoss(taskID, "System Error: The 'reasoning' key must be a non-empty string.", instructionsSHA256)
 			return
 		}
 
 		approvalBool, isBool := approvalVal.(bool)
 		if !isBool {
-			r.kickBackToBoss(taskID, "System Error: The 'approval' key must be a boolean (true or false).")
+			r.kickBackToBoss(taskID, "System Error: The 'approval' key must be a boolean (true or false).", instructionsSHA256)
 			return
 		}
 
@@ -304,20 +308,11 @@ The JSON MUST have exactly two keys:
 	}
 }
 
-func (r *Router) kickBackToBoss(taskID string, errMsg string) {
+func (r *Router) kickBackToBoss(taskID string, errMsg string, instructionsSHA256 string) {
 	fmt.Printf("Boss validation failed format check. Kicking back to Boss.\n")
 	
-	fullMsg := errMsg + `
-
-CRITICAL REMINDER: Your comment MUST be a valid JSON object. You must use your bash/shell tool to execute exactly:
-build comment <task-id> '<json>'
-
-The JSON payload must be strictly formatted with exactly two keys:
-` + "```json\n{\n  \"reasoning\": \"Detailed explanation of your evaluation...\",\n  \"approval\": boolean\n}\n```" + `
-- "reasoning": A non-empty string explaining your evaluation in detail.
-- "approval": A boolean (true or false). true if you approve, false if you reject.`
-
-	r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, fullMsg)
+	r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, errMsg)
+	r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds) VALUES (?, 1, 'boss_signoff_failure', ?, ?, ?, ?, 0)", taskID, r.provider, r.model, instructionsSHA256, version.Version)
 	r.db.Exec("UPDATE tasks SET agent_id = 4 WHERE id = ?", taskID)
 	r.lastPrintedState = fmt.Sprintf("active:%s:4", taskID)
 	r.printTree(taskID, 4, "")
