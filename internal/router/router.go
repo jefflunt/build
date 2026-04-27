@@ -18,11 +18,13 @@ import (
 type Router struct {
 	db               *sql.DB
 	lastPrintedState string
+	provider         string
+	model            string
 }
 
 // NewRouter creates a new router instance.
-func NewRouter(db *sql.DB) *Router {
-	return &Router{db: db}
+func NewRouter(db *sql.DB, provider, model string) *Router {
+	return &Router{db: db, provider: provider, model: model}
 }
 
 // Run starts the persistent reconciliation loop.
@@ -102,7 +104,7 @@ func (r *Router) reconcile() error {
 	} else {
 		// Update DB to reflect initial assignment
 		_, _ = r.db.Exec("UPDATE tasks SET agent_id = 2 WHERE id = ?", id)
-		r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action) VALUES (?, 1, 'assign_to_dev')", id)
+		r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version) VALUES (?, 1, 'assign_to_dev', NULL, NULL, NULL, NULL)", id)
 	}
 
 	currentState := fmt.Sprintf("active:%s:%d", id, currentAssignee)
@@ -153,9 +155,9 @@ func (r *Router) processTask(taskID, title, description string, assigneeID int) 
 	defer os.Remove(agentInstructionFile)
 
 	// Run autonomous opencode CLI session
-	fmt.Printf("Launching autonomous opencode session for %s...\n", roleFile)
+	fmt.Printf("Launching autonomous opencode session for %s with model %s/%s...\n", roleFile, r.provider, r.model)
 	
-	cmd := exec.Command("opencode", "run", fullInstructions)
+	cmd := exec.Command("opencode", "-m", fmt.Sprintf("%s/%s", r.provider, r.model), "run", fullInstructions)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	
@@ -186,7 +188,7 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 	switch assigneeID {
 	case 2: // Dev finished -> Hand off to Tester
 		r.db.Exec("UPDATE tasks SET agent_id = 3 WHERE id = ?", taskID)
-		r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_instructions_sha256, build_version) VALUES (?, 1, 'assign_to_tester', ?, ?)", taskID, instructionsSHA256, buildVersion)
+		r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version) VALUES (?, 1, 'assign_to_tester', ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion)
 		r.lastPrintedState = fmt.Sprintf("active:%s:3", taskID)
 		r.printTree(taskID, 3, "")
 	case 3: // Tester finished -> Run tests
@@ -202,12 +204,12 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 			attempts++
 			if attempts >= 3 {
 				r.db.Exec("UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = ? WHERE id = ?", attempts, taskID)
-				r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_instructions_sha256, build_version) VALUES (?, 1, 'task_rejected', ?, ?)", taskID, instructionsSHA256, buildVersion)
+				r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version) VALUES (?, 1, 'task_rejected', ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion)
 				r.lastPrintedState = "failed:" + taskID
 				r.printTree("", 0, taskID)
 			} else {
 				r.db.Exec("UPDATE tasks SET agent_id = 2, approval_attempts = ? WHERE id = ?", attempts, taskID)
-				r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_instructions_sha256, build_version) VALUES (?, 1, 'assign_to_dev', ?, ?)", taskID, instructionsSHA256, buildVersion)
+				r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version) VALUES (?, 1, 'assign_to_dev', ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion)
 				r.lastPrintedState = fmt.Sprintf("active:%s:2", taskID)
 				r.printTree(taskID, 2, "")
 			}
@@ -225,7 +227,7 @@ The JSON MUST have exactly two keys:
 			r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, instructionMsg)
 
 			r.db.Exec("UPDATE tasks SET agent_id = 4 WHERE id = ?", taskID)
-			r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_instructions_sha256, build_version) VALUES (?, 1, 'assign_to_boss', ?, ?)", taskID, instructionsSHA256, buildVersion)
+			r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version) VALUES (?, 1, 'assign_to_boss', ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion)
 			r.lastPrintedState = fmt.Sprintf("active:%s:4", taskID)
 			r.printTree(taskID, 4, "")
 		}
@@ -276,20 +278,20 @@ The JSON MUST have exactly two keys:
 		if approvalBool {
 			fmt.Printf("Boss approved task %s.\n", taskID)
 			r.db.Exec("UPDATE tasks SET status = 'done' WHERE id = ?", taskID)
-			r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_instructions_sha256, build_version) VALUES (?, 1, 'task_approved', ?, ?)", taskID, instructionsSHA256, buildVersion)
+			r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version) VALUES (?, 1, 'task_approved', ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion)
 			r.lastPrintedState = "done:" + taskID
 			r.printTree("", 0, "")
 		} else {
 			fmt.Printf("Boss rejected task %s. Kicking back to Dev.\n", taskID)
 			attempts++
-			r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_instructions_sha256, build_version) VALUES (?, 1, 'task_rejected', ?, ?)", taskID, instructionsSHA256, buildVersion)
+			r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version) VALUES (?, 1, 'task_rejected', ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion)
 			if attempts >= 3 {
 				r.db.Exec("UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = ? WHERE id = ?", attempts, taskID)
 				r.lastPrintedState = "failed:" + taskID
 				r.printTree("", 0, taskID)
 			} else {
 				r.db.Exec("UPDATE tasks SET agent_id = 2, approval_attempts = ? WHERE id = ?", attempts, taskID)
-				r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_instructions_sha256, build_version) VALUES (?, 1, 'assign_to_dev', ?, ?)", taskID, instructionsSHA256, buildVersion)
+				r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version) VALUES (?, 1, 'assign_to_dev', ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion)
 				r.lastPrintedState = fmt.Sprintf("active:%s:2", taskID)
 				r.printTree(taskID, 2, "")
 			}

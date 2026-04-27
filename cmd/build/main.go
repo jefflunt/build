@@ -180,7 +180,16 @@ func runRouter() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	// Start Router
-	r := router.NewRouter(database)
+	provider := os.Getenv("BUILD_LLM_PROVIDER")
+	if provider == "" {
+		provider = "google"
+	}
+	model := os.Getenv("BUILD_LLM_MODEL")
+	if model == "" {
+		model = "gemini-3.1-flash-lite-preview"
+	}
+
+	r := router.NewRouter(database, provider, model)
 	go r.Run()
 
 	<-sigChan
