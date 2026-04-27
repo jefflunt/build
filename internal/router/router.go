@@ -127,7 +127,7 @@ func (r *Router) processTask(taskID, title, description string, assigneeID int) 
 
 	// Combine instructions
 	agentBytes, _ := os.ReadFile(roleFile)
-	contextContent := fmt.Sprintf("\n\n---\n### YOUR CURRENT ASSIGNMENT\nTask ID: %s\n\nPlease run `script/context %s` to retrieve the task description and comments history before you begin.\n", taskID, taskID)
+	contextContent := fmt.Sprintf("\n\n---\n### YOUR CURRENT ASSIGNMENT\nTask ID: %s\n\nPlease run `build context %s` to retrieve the task description and comments history before you begin.\n", taskID, taskID)
 	
 	fullInstructions := string(agentBytes) + contextContent
 

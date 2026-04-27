@@ -48,4 +48,4 @@ The Router handles moving tasks through the `Dev` -> `Tester` -> `Boss` workflow
 ## 5. Escalation and Sign-off
 You are shielded from the day-to-day work. The system handles retries and deadlocks automatically via the `Router`. You only interact with the system when:
 1. You are delegating new work (`build design` & `build ingest`).
-2. A task reaches `approval_attempts >= 3` and transitions to the `failed` state. When this happens, the Router halts and assigns the task to the `Owner` (you) so you can review the comments, offer feedback via `script/comment`, and run `script/try_again <task-id>` to restart the workflow.
+2. A task reaches `approval_attempts >= 3` and transitions to the `failed` state. When this happens, the Router halts and assigns the task to the `Owner` (you) so you can review the comments, offer feedback via `build comment <task-id> "<comment>"`, and run `build try_again <task-id>` to restart the workflow.

@@ -64,6 +64,10 @@ func main() {
 			{"seed", "seed the database with test data"},
 			{"design", "start a new design interaction"},
 			{"ingest", "ingest breakdown output"},
+			{"context", "view task context and comments"},
+			{"comment", "add a comment to a task"},
+			{"approve", "approve a task (boss only)"},
+			{"try_again", "reset a failed task for the dev"},
 			{"init", "initialize the project"},
 			{"teardown", "remove the .build project directory"},
 			{"version", "show the build version"},
@@ -89,6 +93,34 @@ func main() {
 		} else {
 			fmt.Println("Usage: build ingest <path/to/breakdown/output/directory>")
 		}
+	case "context":
+		if len(os.Args) < 3 {
+			fmt.Println("Usage: build context <task-id>")
+			os.Exit(1)
+		}
+		printContext(os.Args[2])
+	case "comment":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: build comment <task-id> <comment text...>")
+			os.Exit(1)
+		}
+		addComment(os.Args[2], strings.Join(os.Args[3:], " "))
+	case "approve":
+		if len(os.Args) < 3 {
+			fmt.Println("Usage: build approve <task-id> [comments...]")
+			os.Exit(1)
+		}
+		comments := ""
+		if len(os.Args) > 3 {
+			comments = strings.Join(os.Args[3:], " ")
+		}
+		approveTask(os.Args[2], comments)
+	case "try_again":
+		if len(os.Args) < 3 {
+			fmt.Println("Usage: build try_again <task-id>")
+			os.Exit(1)
+		}
+		tryAgain(os.Args[2])
 	case "init":
 		initProject()
 	case "teardown":
@@ -383,6 +415,100 @@ func writeAgentFile(path string) {
 	}
 	os.WriteFile(path, data, 0644)
 	fmt.Printf("Agent 'build-designer' installed to %s\n", path)
+}
+
+func printContext(taskID string) {
+	database, err := db.InitDB(".build/build.db")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: .build/build.db not found or failed to init: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	fmt.Println("========================================")
+	fmt.Printf("TASK CONTEXT: %s\n", taskID)
+	fmt.Println("========================================")
+
+	var title, desc string
+	err = database.QueryRow("SELECT title, description FROM tasks WHERE id = ?", taskID).Scan(&title, &desc)
+	if err == nil {
+		fmt.Printf("      Title = %s\n", title)
+		fmt.Printf("Description = %s\n", desc)
+	}
+
+	fmt.Println("\n========================================")
+	fmt.Println("COMMENTS HISTORY")
+	fmt.Println("========================================")
+
+	rows, err := database.Query("SELECT a.role, c.content FROM comments c JOIN agents a ON c.agent_id = a.id WHERE c.task_id = ? ORDER BY c.id ASC", taskID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var role, content string
+			rows.Scan(&role, &content)
+			fmt.Printf("%s: %s\n----------------------------------------\n", role, content)
+		}
+	}
+}
+
+func addComment(taskID, comment string) {
+	database, err := db.InitDB(".build/build.db")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: .build/build.db not found or failed to init: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	var agentID sql.NullInt64
+	err = database.QueryRow("SELECT agent_id FROM tasks WHERE id = ?", taskID).Scan(&agentID)
+	
+	// Fallback to Owner (1)
+	assignee := 1
+	if err == nil && agentID.Valid {
+		assignee = int(agentID.Int64)
+	}
+
+	_, err = database.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, ?, ?)", taskID, assignee, comment)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error adding comment: %v\n", err)
+	} else {
+		fmt.Printf("Comment added to task %s.\n", taskID)
+	}
+}
+
+func approveTask(taskID, comments string) {
+	database, err := db.InitDB(".build/build.db")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: .build/build.db not found or failed to init: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	_, err = database.Exec("UPDATE tasks SET status='done' WHERE id = ?", taskID)
+	if err == nil && comments != "" {
+		database.Exec("INSERT INTO audit_log (task_id, actor_id, action, content) VALUES (?, 4, 'approve', ?)", taskID, comments)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error approving task: %v\n", err)
+	} else {
+		fmt.Printf("Task %s approved and marked as done.\n", taskID)
+	}
+}
+
+func tryAgain(taskID string) {
+	database, err := db.InitDB(".build/build.db")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: .build/build.db not found or failed to init: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	_, err = database.Exec("UPDATE tasks SET status='todo', agent_id=2, approval_attempts=0 WHERE id = ?", taskID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error updating task: %v\n", err)
+	} else {
+		fmt.Printf("Task %s has been reset and kicked back to the Developer.\n", taskID)
+	}
 }
 
 func teardownProject() {
