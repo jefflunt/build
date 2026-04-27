@@ -57,6 +57,7 @@ func (r *Router) reconcile() error {
 		AND NOT EXISTS (
 			SELECT 1 FROM tasks c WHERE c.parent_id = t.id AND c.status = 'todo'
 		)
+		ORDER BY t.rowid ASC
 		LIMIT 1
 	`)
 
