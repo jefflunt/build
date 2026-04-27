@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
 // Router represents the persistent background service.
 type Router struct {
-	db *sql.DB
+	db               *sql.DB
+	lastPrintedState string
 }
 
 // NewRouter creates a new router instance.
@@ -32,13 +34,18 @@ func (r *Router) Run() error {
 
 func (r *Router) reconcile() error {
 	// 1. Check if blocked by ANY failed task
-	var failedCount int
-	err := r.db.QueryRow("SELECT COUNT(*) FROM tasks WHERE status = 'failed'").Scan(&failedCount)
-	if err != nil {
+	var failedID string
+	err := r.db.QueryRow("SELECT id FROM tasks WHERE status = 'failed' LIMIT 1").Scan(&failedID)
+	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
-	if failedCount > 0 {
-		fmt.Println("Router blocked by failed task. Waiting for Owner intervention...")
+	if failedID != "" {
+		currentState := "failed:" + failedID
+		if r.lastPrintedState != currentState {
+			r.printTree("", 0, failedID)
+			fmt.Println("\nRouter blocked by failed task. Waiting for Owner intervention...")
+			r.lastPrintedState = currentState
+		}
 		return nil
 	}
 
@@ -67,6 +74,9 @@ func (r *Router) reconcile() error {
 
 	err = row.Scan(&id, &title, &description, &assigneeID)
 	if err == sql.ErrNoRows {
+		if r.lastPrintedState != "idle" {
+			r.lastPrintedState = "idle"
+		}
 		return nil // Nothing to do
 	} else if err != nil {
 		return err
@@ -79,6 +89,12 @@ func (r *Router) reconcile() error {
 	} else {
 		// Update DB to reflect initial assignment
 		_, _ = r.db.Exec("UPDATE tasks SET agent_id = 2 WHERE id = ?", id)
+	}
+
+	currentState := fmt.Sprintf("active:%s:%d", id, currentAssignee)
+	if r.lastPrintedState != currentState {
+		r.printTree(id, currentAssignee, "")
+		r.lastPrintedState = currentState
 	}
 
 	// Acquire lock
@@ -119,13 +135,13 @@ func (r *Router) processTask(taskID, title, description string, assigneeID int) 
 	os.WriteFile(agentInstructionFile, []byte(fullInstructions), 0644)
 	defer os.Remove(agentInstructionFile)
 
-	// Run opencode CLI session
-	fmt.Printf("Launching opencode for %s...\n", roleFile)
+	// Run autonomous opencode CLI session
+	fmt.Printf("Launching autonomous opencode session for %s...\n", roleFile)
 	
-	cmd := exec.Command("opencode", ".")
+	cmd := exec.Command("opencode", "run", fullInstructions)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
+	// Intentionally omitting cmd.Stdin to make the opencode execution non-interactive
 	
 	err := cmd.Run()
 	if err != nil {
@@ -180,6 +196,62 @@ func (r *Router) handlePostSession(taskID string, assigneeID int) {
 			r.db.Exec("UPDATE tasks SET agent_id = 2, approval_attempts = ? WHERE id = ?", attempts, taskID)
 		}
 	}
+}
+
+func (r *Router) printTree(activeID string, activeAssignee int, failedID string) {
+	query := `
+	WITH RECURSIVE task_tree AS (
+		SELECT id, parent_id, title, type, status, 0 AS depth, CAST(rowid AS TEXT) AS sort_path, rowid
+		FROM tasks
+		WHERE parent_id = '' OR parent_id IS NULL
+		UNION ALL
+		SELECT t.id, t.parent_id, t.title, t.type, t.status, tt.depth + 1, tt.sort_path || '/' || substr('0000000000' || t.rowid, -10, 10), t.rowid
+		FROM tasks t
+		JOIN task_tree tt ON t.parent_id = tt.id
+	)
+	SELECT id, title, type, status, depth
+	FROM task_tree
+	ORDER BY sort_path ASC;
+	`
+	rows, err := r.db.Query(query)
+	if err != nil {
+		fmt.Printf("Error querying tree: %v\n", err)
+		return
+	}
+	defer rows.Close()
+
+	fmt.Println("\n======================== TASK TREE ========================")
+	for rows.Next() {
+		var id, title, taskType, status string
+		var depth int
+		if err := rows.Scan(&id, &title, &taskType, &status, &depth); err != nil {
+			continue
+		}
+
+		prefix := ""
+		suffix := ""
+
+		if failedID != "" && id == failedID {
+			prefix = "\033[91m" // Light Red
+		} else if id == activeID {
+			switch activeAssignee {
+			case 2:
+				prefix = "\033[94m" // Light Blue
+			case 3:
+				prefix = "\033[93m" // Light Yellow
+			case 4:
+				prefix = "\033[32m" // Green
+			}
+		}
+
+		if prefix != "" {
+			suffix = "\033[0m"
+		}
+
+		indent := strings.Repeat("    ", depth)
+		fmt.Printf("%s%s- [%s] %s: %s (%s)%s\n", prefix, indent, taskType, id, title, status, suffix)
+	}
+	fmt.Println("===========================================================")
 }
 
 
