@@ -194,6 +194,18 @@ func (r *Router) handlePostSession(taskID string, assigneeID int) {
 			}
 		} else {
 			fmt.Println("Tests passed. Handing off to Boss.")
+			
+			// Inject the strict JSON instructions as a system comment before handing off to the Boss
+			instructionMsg := `SYSTEM INSTRUCTION for Boss:
+You are about to evaluate this task. When you are ready to make your final decision, you MUST use the build comment tool with a strictly formatted JSON payload:
+build comment ` + taskID + ` '<json>'
+
+The JSON MUST have exactly two keys:
+` + "```json\n{\n  \"reasoning\": \"Detailed explanation of your evaluation...\",\n  \"approval\": true\n}\n```" + `
+- "reasoning": A non-empty string explaining your evaluation in detail.
+- "approval": A boolean (true or false). true if you approve, false if you reject.`
+			r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, instructionMsg)
+
 			r.db.Exec("UPDATE tasks SET agent_id = 4 WHERE id = ?", taskID)
 			r.lastPrintedState = fmt.Sprintf("active:%s:4", taskID)
 			r.printTree(taskID, 4, "")
@@ -270,8 +282,19 @@ func (r *Router) handlePostSession(taskID string, assigneeID int) {
 
 func (r *Router) kickBackToBoss(taskID string, errMsg string) {
 	fmt.Printf("Boss validation failed format check. Kicking back to Boss.\n")
+	
+	fullMsg := errMsg + `
+
+CRITICAL REMINDER: Your comment MUST be a valid JSON object. You must use your bash/shell tool to execute exactly:
+build comment <task-id> '<json>'
+
+The JSON payload must be strictly formatted with exactly two keys:
+` + "```json\n{\n  \"reasoning\": \"Detailed explanation of your evaluation...\",\n  \"approval\": true\n}\n```" + `
+- "reasoning": A non-empty string explaining your evaluation in detail.
+- "approval": A boolean (true or false). true if you approve the implementation, false if you reject it.`
+
 	// Insert system error comment
-	r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, errMsg)
+	r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, fullMsg)
 	// Re-assign to Boss
 	r.db.Exec("UPDATE tasks SET agent_id = 4 WHERE id = ?", taskID)
 	r.lastPrintedState = fmt.Sprintf("active:%s:4", taskID)
