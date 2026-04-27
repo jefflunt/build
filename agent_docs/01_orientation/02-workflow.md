@@ -12,10 +12,10 @@ All actionable tasks (leaf nodes in the task tree) begin in the `todo` status an
    - **Pass**: The task is advanced to the Boss.
    - **Fail**: The Router logs the test output as a comment, increments `approval_attempts`, and kicks the task back to the Dev.
 4. **Boss Verification**: The `Boss` reviews the code and test output against the original task description (injected by the Router).
-   - The Boss uses a bash HEREDOC to execute `build comment <task-id> "$JSON_PAYLOAD"` to provide its decision in a strict JSON format containing `"reasoning"` and `"approval": true/false`. This prevents bash quote-escaping errors.
-   - **Approve (`true`)**: The Router parses the JSON and marks the task as `done`.
-   - **Reject (`false`)**: The Router increments `approval_attempts` and kicks the task back to the Dev.
-   - **Format Error**: If the Boss fails to provide valid JSON, the Router catches this and kicks the task back to the Boss with a System Error explaining the mistake.
+   - The Boss executes `build review <task-id> <approve|reject> "<reasoning>"` to provide its decision.
+   - **Approve**: The Router parses the output and marks the task as `done`.
+   - **Reject**: The Router increments `approval_attempts` and kicks the task back to the Dev.
+   - **Format Error**: If the Boss fails to use the command correctly, the Router catches this and kicks the task back to the Boss with a System Error explaining the mistake.
 
 ## 2. Agent Communication
 Agents are not allowed to arbitrarily edit tasks. All notes, context, feedback, and test outputs are appended to the task chronologically using `build comment <task-id> "<comment>"`. Agents retrieve this history automatically via the Router's context injection, but human Owners can view it using `build context <task-id>`.

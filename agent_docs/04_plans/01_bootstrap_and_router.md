@@ -42,7 +42,7 @@ The `Router` evaluates the dependency tree in an infinite loop:
     - **Task**: Assigned linearly `Dev` -> `Tester` -> `Boss`.
     - **Context Injection**: The Router fetches the task details and comments history and injects it directly into the agent's prompt to avoid blind execution loops.
     - **Automated Tests**: Tested between Dev and Boss. Failures kick back to Dev.
-    - **Sign-off**: Boss evaluates against intent using a JSON HEREDOC via `build comment`. Approve sets to `done`. Rejection kicks back to Dev via `build comment`.
+    - **Sign-off**: Boss evaluates against intent using `build review`. Approve sets to `done`. Rejection kicks back to Dev.
 3. **Escalation**:
     - If a task is kicked back (fails tests or Boss rejects) 3 times (`approval_attempts >= 3`), the Router transitions it to `failed`.
     - At this point, the human Owner must intervene, leave comments, and run `build try_again <task-id>` to restart the cycle.

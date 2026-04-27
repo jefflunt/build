@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -66,6 +67,7 @@ func main() {
 			{"ingest", "ingest breakdown output"},
 			{"context", "view task context and comments"},
 			{"comment", "add a comment to a task"},
+			{"review", "review a task (approve/reject) with reasoning"},
 			{"approve", "approve a task (boss only)"},
 			{"redo", "reset a failed task for the dev"},
 			{"init", "initialize the project"},
@@ -105,6 +107,31 @@ func main() {
 			os.Exit(1)
 		}
 		addComment(os.Args[2], strings.Join(os.Args[3:], " "))
+	case "review":
+		if len(os.Args) < 5 {
+			fmt.Println("Usage: build review <task-id> <approve|reject> <reasoning...>")
+			os.Exit(1)
+		}
+		taskID := os.Args[2]
+		decision := strings.ToLower(os.Args[3])
+		reasoning := strings.Join(os.Args[4:], " ")
+
+		var approved bool
+		if decision == "approve" {
+			approved = true
+		} else if decision == "reject" {
+			approved = false
+		} else {
+			fmt.Println("Error: decision must be 'approve' or 'reject'")
+			os.Exit(1)
+		}
+
+		payload := map[string]interface{}{
+			"approval":  approved,
+			"reasoning": reasoning,
+		}
+		jsonBytes, _ := json.MarshalIndent(payload, "", "  ")
+		addComment(taskID, string(jsonBytes))
 	case "approve":
 		if len(os.Args) < 3 {
 			fmt.Println("Usage: build approve <task-id>")

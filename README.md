@@ -58,5 +58,6 @@ You are shielded from the day-to-day work. The system handles retries and deadlo
 ## 6. Other Useful Commands
 - `build context <task-id>`: View the task description and history of comments.
 - `build comment <task-id> "<comment>"`: Leave a note or feedback on a task.
+- `build review <task-id> <approve|reject> "<reasoning>"`: Review a task with reasoning (used primarily by the Boss agent).
 - `build approve <task-id>`: Manually mark a task as `done` (only used if the Boss fails to run it).
 - `build redo <task-id>`: Reset a `failed` task.

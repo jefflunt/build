@@ -33,6 +33,10 @@ func (r *Router) Run() error {
 	for {
 		if err := r.reconcile(); err != nil {
 			fmt.Printf("Error reconciling: %v\n", err)
+			time.Sleep(1 * time.Second) // Prevent busy loop on error
+		} else {
+			// Small delay to prevent 100% CPU usage when idle or polling
+			time.Sleep(1 * time.Second)
 		}
 	}
 	return nil
@@ -244,7 +248,7 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 			fmt.Println("Tests passed. Handing off to Boss.")
 			
 			// Concise instruction for the Boss
-			instructionMsg := "**CRITICAL**: please review task " + taskID + " and provide your feedback, positive or negative, in the structured JSON format specified in your instructions. DO NOT ask questions; provide ONLY the final JSON evaluation."
+			instructionMsg := "**CRITICAL**: please review task " + taskID + " and provide your feedback using the `build review` command. DO NOT ask questions; provide ONLY the final review."
 			r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, instructionMsg)
 
 			r.db.Exec("UPDATE tasks SET agent_id = 4 WHERE id = ?", taskID)
@@ -256,7 +260,7 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 		var commentContent string
 		errComment := r.db.QueryRow("SELECT content FROM comments WHERE task_id = ? AND agent_id = 4 ORDER BY id DESC LIMIT 1", taskID).Scan(&commentContent)
 		if errComment != nil {
-			r.kickBackToBoss(taskID, "System Error: You exited without leaving a comment. You MUST use `build comment` to leave your JSON evaluation before exiting.", instructionsSHA256, attempts)
+			r.kickBackToBoss(taskID, "System Error: You exited without leaving a review. You MUST use `build review` to leave your evaluation before exiting.", instructionsSHA256, attempts)
 			return
 		}
 
@@ -269,13 +273,13 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 		var payload map[string]interface{}
 		errJson := json.Unmarshal([]byte(cleanedComment), &payload)
 		if errJson != nil {
-			r.kickBackToBoss(taskID, "System Error: Your comment was not valid JSON. Please provide exactly the required JSON format.", instructionsSHA256, attempts)
+			r.kickBackToBoss(taskID, "System Error: Your review was not correctly formatted. Please use the `build review` command.", instructionsSHA256, attempts)
 			return
 		}
 
 		// 3. Strict schema validation
 		if len(payload) != 2 {
-			r.kickBackToBoss(taskID, "System Error: Your JSON payload must contain exactly two keys: 'reasoning' and 'approval'.", instructionsSHA256, attempts)
+			r.kickBackToBoss(taskID, "System Error: Your review payload must contain exactly two keys: 'reasoning' and 'approval'. Please use the `build review` command.", instructionsSHA256, attempts)
 			return
 		}
 
@@ -338,22 +342,13 @@ func (r *Router) kickBackToBoss(taskID string, errMsg string, instructionsSHA256
 
 	fullMsg := errMsg + `
 
-CRITICAL REMINDER: Your comment MUST be a valid JSON object. To safely handle quotes, use a HEREDOC to execute exactly:
+CRITICAL REMINDER: You must use your bash/shell tool to execute the 'build review' command.
 
-` + "```" + `bash
-JSON_PAYLOAD=$(cat <<'EOF'
-{
-  "reasoning": "Detailed explanation of your evaluation...",
-  "approval": boolean
-}
-EOF
-)
-build comment ` + taskID + ` "$JSON_PAYLOAD"
-` + "```" + `
+The syntax is:
+build review ` + taskID + ` <approve|reject> "<reasoning>"
 
-The JSON payload must be strictly formatted with exactly two keys:
-- "reasoning": A non-empty string explaining your evaluation in detail.
-- "approval": A boolean (true or false). true if you approve, false if you reject.`
+Example:
+build review ` + taskID + ` approve "The code looks good and tests pass."`
 
 	r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, fullMsg)
 	r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds, opencode_agent) VALUES (?, 1, 'boss_signoff_failure', ?, ?, ?, ?, 0, 'plan')", taskID, r.provider, r.model, instructionsSHA256, version.Version)
