@@ -35,6 +35,8 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		action TEXT,
 		llm_provider TEXT,
 		llm_model TEXT,
+		llm_instructions_sha256 TEXT,
+		build_version TEXT,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS comments (
@@ -46,5 +48,14 @@ func InitDB(dbPath string) (*sql.DB, error) {
 	);
 	`
 	_, err = db.Exec(schema)
-	return db, err
+	if err != nil {
+		return nil, err
+	}
+
+	// Migration: ensure new columns exist in audit_logs
+	_, err = db.Exec("ALTER TABLE audit_logs ADD COLUMN llm_instructions_sha256 TEXT")
+	_, err = db.Exec("ALTER TABLE audit_logs ADD COLUMN build_version TEXT")
+    // Note: Errors here (e.g. "duplicate column name") are expected and ignored
+
+	return db, nil
 }
