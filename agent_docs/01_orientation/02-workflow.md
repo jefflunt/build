@@ -12,8 +12,8 @@ All actionable tasks (leaf nodes in the task tree) begin in the `todo` status an
    - **Pass**: The task is advanced to the Boss.
    - **Fail**: The Router logs the test output as a comment, increments `approval_attempts`, and kicks the task back to the Dev.
 4. **Boss Verification**: The `Boss` reviews the code and test output against the original task description (injected by the Router).
-   - The Boss executes `build review <task-id> <approve|reject> "<reasoning>"` to provide its decision.
-   - **Approve**: The Router parses the output and marks the task as `done`.
+   - The Boss executes `build review <task-id> <approve|reject> "<reasoning>"` to provide its decision. The reasoning must be a single line of text enclosed in double quotes, using single quotes internally.
+   - **Approve**: The Router marks the task as `done`.
    - **Reject**: The Router increments `approval_attempts` and kicks the task back to the Dev.
    - **Format Error**: If the Boss fails to use the command correctly, the Router catches this and kicks the task back to the Boss with a System Error explaining the mistake.
 
