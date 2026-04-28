@@ -9,12 +9,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/jefflunt/build/internal/db"
 	"github.com/jefflunt/build/internal/router"
@@ -63,7 +61,6 @@ func main() {
 			{"start", "start the router service"},
 			{"status", "show router status"},
 			{"seed", "seed the database with test data"},
-			{"design", "start a new design interaction"},
 			{"ingest", "ingest breakdown output"},
 			{"context", "view task context and comments"},
 			{"why-failed", "get full context and audit history for a stalled task"},
@@ -88,8 +85,6 @@ func main() {
 		}
 	case "seed":
 		seedDB()
-	case "design":
-		startDesigner()
 	case "ingest":
 		if len(os.Args) >= 3 {
 			ingestTasks(os.Args[2])
@@ -230,55 +225,6 @@ func runRouter() {
 	fmt.Println("Router stopped.")
 }
 
-func startDesigner() {
-	// 1. Check for opencode
-	if _, err := exec.LookPath("opencode"); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: 'opencode' not found in PATH. Please install it first.\n")
-		os.Exit(1)
-	}
-
-	sessionID := time.Now().UnixNano() / 1000 // Microseconds UTC
-	sessionDir := fmt.Sprintf(".build/designs/%d", sessionID)
-	os.MkdirAll(sessionDir, 0755)
-
-	fmt.Printf("--- Starting Design Session: %d ---\n", sessionID)
-	fmt.Printf("Design session ready at %s/design.md\n", sessionDir)
-
-	// 2. Run opencode
-	// Launch the interactive TUI.
-	// The agent 'build-designer' is pre-configured in .opencode/agents/build-designer.md
-	// and will be available for selection in the TUI session.
-	cmd := exec.Command("opencode", ".")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Designer session exited with error: %v\n", err)
-		os.Exit(1)
-	}
-
-
-
-
-	// 3. Post-session: breakdown + ingest
-	designFile := filepath.Join(sessionDir, "design.md")
-	if _, err := os.Stat(designFile); err == nil {
-		fmt.Println("Design detected. Running breakdown...")
-		breakdownCmd := exec.Command("breakdown", designFile, sessionDir)
-		if err := breakdownCmd.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "Breakdown failed: %v\n", err)
-			os.Exit(1)
-		}
-		
-		fmt.Println("Ingesting tasks...")
-		// Use the output directory that breakdown generates. By default, breakdown places 
-		// its file structure in the target folder we gave it (`sessionDir`).
-		ingestTasks(sessionDir)
-	} else {
-		fmt.Println("No design.md found. Skipping breakdown/ingestion.")
-	}
-}
 
 func ingestTasks(targetPath string) {
 	info, err := os.Stat(targetPath)

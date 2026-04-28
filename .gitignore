@@ -3,3 +3,7 @@
 /build
 .build/
 /bin
+*.log
+tmp/
+*.sqlite
+*.db
