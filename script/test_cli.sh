@@ -29,9 +29,23 @@ else
 fi
 
 # Verify 'enqueue' with argument succeeds
-if ./build enqueue myplan.json | grep -q "Enqueuing plan file: myplan.json"; then
+# We create a dummy plan file first
+echo "# Test Plan" > myplan.json
+if ./build enqueue myplan.json; then
     echo "Successfully verified 'enqueue' with arg works."
+    
+    # Verify the output directory was created
+    # The session name derived from 'myplan.json' is 'myplan'
+    OUTPUT_DIR="/tmp/build/breakdowns/myplan"
+    if [ -d "$OUTPUT_DIR" ]; then
+        echo "Successfully verified output directory $OUTPUT_DIR was created."
+        rm -rf /tmp/build/breakdowns/myplan
+    else
+        echo "Failed: Output directory $OUTPUT_DIR was not created."
+        exit 1
+    fi
 else
     echo "Failed: 'enqueue' with arg did not work as expected."
     exit 1
 fi
+rm myplan.json
