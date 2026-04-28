@@ -70,6 +70,7 @@ func main() {
 			{"redo", "reset a failed task for the dev"},
 			{"init", "initialize the project"},
 			{"teardown", "remove the .build project directory"},
+			{"enqueue", "enqueue a plan file"},
 			{"version", "show the build version"},
 		}
 		for _, c := range commands {
@@ -150,6 +151,12 @@ func main() {
 		initProject()
 	case "teardown":
 		teardownProject()
+	case "enqueue":
+		if len(os.Args) < 3 {
+			fmt.Println("Usage: build enqueue <plan file>")
+			os.Exit(1)
+		}
+		enqueuePlan(os.Args[2])
 	default:
 		fmt.Printf("Unknown subcommand: %s\n", os.Args[1])
 		os.Exit(1)
@@ -596,4 +603,8 @@ func teardownProject() {
 		os.Exit(1)
 	}
 	fmt.Println("Project torn down. .build/ directory removed.")
+}
+
+func enqueuePlan(planFile string) {
+	fmt.Printf("Enqueuing plan file: %s\n", planFile)
 }
