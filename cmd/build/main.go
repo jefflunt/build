@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -606,5 +607,24 @@ func teardownProject() {
 }
 
 func enqueuePlan(planFile string) {
-	fmt.Printf("Enqueuing plan file: %s\n", planFile)
+	if _, err := os.Stat(planFile); os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Error: Plan file %s does not exist.\n", planFile)
+		os.Exit(1)
+	}
+
+	base := filepath.Base(planFile)
+	ext := filepath.Ext(base)
+	sessionName := strings.TrimSuffix(base, ext)
+
+	outputDir := filepath.Join("/tmp", "build", "breakdowns", sessionName)
+
+	cmd := exec.Command("breakdown", "-v", planFile, outputDir)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error running breakdown: %v\n", err)
+		os.Exit(1)
+	}
+
+	ingestTasks(outputDir)
 }
