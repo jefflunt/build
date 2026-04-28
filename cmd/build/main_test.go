@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"github.com/jefflunt/build/internal/db"
 )
@@ -20,6 +21,7 @@ func TestMain(m *testing.M) {
 	
 	// Create mock breakdown script
 	content := `#!/bin/bash
+echo "$1 $2 $3" > .breakdown_args
 mkdir -p "$3"
 echo "# Mock Session" > "$3/README.md"
 echo "# Task 1" > "$3/task1.md"
@@ -60,9 +62,25 @@ func TestEnqueuePlan_Success(t *testing.T) {
 	planFile := filepath.Join(tmpDir, "my-session.md")
 	os.WriteFile(planFile, []byte("# My Session"), 0644)
 
+	// Clean previous args
+	os.Remove(".breakdown_args")
+
 	err := enqueuePlan(planFile)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
+	}
+
+	// Verify arguments passed to mock breakdown
+	args, err := os.ReadFile(".breakdown_args")
+	if err != nil {
+		t.Fatalf("failed to read .breakdown_args: %v", err)
+	}
+	
+	sessionName := "my-session"
+	expectedDir := filepath.Join("/tmp", "build", "breakdowns", sessionName)
+	expectedArgs := "-v " + planFile + " " + expectedDir
+	if strings.TrimSpace(string(args)) != expectedArgs {
+		t.Errorf("expected args %q, got %q", expectedArgs, string(args))
 	}
 
 	// Verify database was populated
@@ -72,9 +90,9 @@ func TestEnqueuePlan_Success(t *testing.T) {
 	}
 	defer database.Close()
 	
-	var count int
-	database.QueryRow("SELECT COUNT(*) FROM tasks").Scan(&count)
-	if count == 0 {
-		t.Error("expected tasks in DB, got 0")
+	var title string
+	err = database.QueryRow("SELECT title FROM tasks WHERE title LIKE 'Task 1'").Scan(&title)
+	if err != nil {
+		t.Errorf("expected task 'Task 1' in DB, got error: %v", err)
 	}
 }
