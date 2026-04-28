@@ -12,10 +12,26 @@ else
     exit 1
 fi
 
-# Verify 'help' works
-if ./build help > /dev/null; then
-    echo "Successfully verified 'help' works."
+# Verify 'help' works and contains 'enqueue'
+if ./build help | grep -q "enqueue"; then
+    echo "Successfully verified 'enqueue' is in help."
 else
-    echo "Failed: 'help' subcommand failed."
+    echo "Failed: 'enqueue' not found in help."
+    exit 1
+fi
+
+# Verify 'enqueue' without arguments fails
+if ./build enqueue 2>&1 | grep -q "Usage: build enqueue <plan file>"; then
+    echo "Successfully verified 'enqueue' without args fails."
+else
+    echo "Failed: 'enqueue' without args did not fail as expected."
+    exit 1
+fi
+
+# Verify 'enqueue' with argument succeeds
+if ./build enqueue myplan.json | grep -q "Enqueuing plan file: myplan.json"; then
+    echo "Successfully verified 'enqueue' with arg works."
+else
+    echo "Failed: 'enqueue' with arg did not work as expected."
     exit 1
 fi
