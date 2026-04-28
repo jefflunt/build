@@ -214,6 +214,16 @@ func (r *Router) processTask(taskID, title, description string, assigneeID int) 
 		fmt.Printf("opencode session ended with error: %v\n", runErr)
 	}
 
+	// Run sweep and commit before handoff
+	roleName := "Unknown"
+	switch assigneeID {
+	case 2: roleName = "Dev"
+	case 3: roleName = "Tester"
+	case 4: roleName = "Boss"
+	case 5: roleName = "Lead"
+	}
+	r.runSweepAndCommit(taskID, roleName)
+
 	// Post-session logic
 	r.handlePostSession(taskID, assigneeID, sha256Str, duration, agentName)
 }
@@ -498,4 +508,47 @@ func (r *Router) printTree(activeID string, activeAssignee int, failedID string)
 		fmt.Printf("%s%s- %s: %s (%s)%s\n", prefix, indent, id, title, status, suffix)
 	}
 	fmt.Println("===========================================================")
+}
+func (r *Router) runSweepAndCommit(taskID, role string) {
+	fmt.Println("\n--- Running 'sweep' agent to update .gitignore ---")
+	
+	// Initialize git repo if it doesn't exist
+	if _, err := os.Stat(".git"); os.IsNotExist(err) {
+		fmt.Println("Initializing git repository...")
+		exec.Command("git", "init").Run()
+	}
+
+	agentBytes, err := r.templatesFS.ReadFile("templates/sweep.md")
+	if err != nil {
+		fmt.Printf("Error reading sweep template: %v\n", err)
+		return
+	}
+	
+	sweepInstructionsFile := fmt.Sprintf(".build/sweep_%s.md", taskID)
+	os.WriteFile(sweepInstructionsFile, agentBytes, 0644)
+	defer os.Remove(sweepInstructionsFile)
+	
+	cmd := exec.Command("opencode", "-m", fmt.Sprintf("%s/%s", r.provider, r.model), "--agent", "build", "run", string(agentBytes))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err = cmd.Run()
+	if err != nil {
+		fmt.Printf("Sweep agent ended with error: %v\n", err)
+	}
+	
+	fmt.Println("Committing changes...")
+	exec.Command("git", "add", ".").Run()
+	
+	statusCmd := exec.Command("git", "status", "--porcelain")
+	out, _ := statusCmd.Output()
+	if len(strings.TrimSpace(string(out))) > 0 {
+		commitMsg := fmt.Sprintf("build: updates for task %s by %s", taskID, role)
+		commitCmd := exec.Command("git", "commit", "-m", commitMsg)
+		commitCmd.Stdout = os.Stdout
+		commitCmd.Stderr = os.Stderr
+		commitCmd.Run()
+		fmt.Println("Changes committed successfully.")
+	} else {
+		fmt.Println("No changes to commit.")
+	}
 }

@@ -418,7 +418,8 @@ func initProject() {
 		(2, 'dev', 'Developer'),
 		(3, 'tester', 'Tester'),
 		(4, 'boss', 'Boss'),
-		(5, 'lead', 'Lead Engineer')
+		(5, 'lead', 'Lead Engineer'),
+		(6, 'sweep', 'Git Cleanup Artist')
 	`)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to seed agents: %v\n", err)
