@@ -41,12 +41,16 @@ func generateID() string {
 var agentInstructions embed.FS
 
 func main() {
-	if len(os.Args) < 2 {
+	runCLI(os.Args)
+}
+
+func runCLI(args []string) {
+	if len(args) < 2 {
 		fmt.Println("Usage: build <subcommand>")
 		os.Exit(1)
 	}
 
-	switch os.Args[1] {
+	switch args[1] {
 	case "version":
 		fmt.Println(version.Version)
 		os.Exit(0)
@@ -88,37 +92,37 @@ func main() {
 	case "seed":
 		seedDB()
 	case "ingest":
-		if len(os.Args) >= 3 {
-			ingestTasks(os.Args[2])
+		if len(args) >= 3 {
+			ingestTasks(args[2])
 		} else {
 			fmt.Println("Usage: build ingest <path/to/breakdown/output/directory>")
 		}
 	case "context":
-		if len(os.Args) < 3 {
+		if len(args) < 3 {
 			fmt.Println("Usage: build context <task-id>")
 			os.Exit(1)
 		}
-		printContext(os.Args[2])
+		printContext(args[2])
 	case "why-failed":
-		if len(os.Args) < 3 {
+		if len(args) < 3 {
 			fmt.Println("Usage: build why-failed <task-id>")
 			os.Exit(1)
 		}
-		printWhyFailed(os.Args[2])
+		printWhyFailed(args[2])
 	case "comment":
-		if len(os.Args) < 4 {
+		if len(args) < 4 {
 			fmt.Println("Usage: build comment <task-id> <comment text...>")
 			os.Exit(1)
 		}
-		addComment(os.Args[2], strings.Join(os.Args[3:], " "))
+		addComment(args[2], strings.Join(args[3:], " "))
 	case "review":
-		if len(os.Args) < 5 {
+		if len(args) < 5 {
 			fmt.Println("Usage: build review <task-id> <approve|reject> <reasoning...>")
 			os.Exit(1)
 		}
-		taskID := os.Args[2]
-		decision := strings.ToLower(os.Args[3])
-		reasoning := strings.Join(os.Args[4:], " ")
+		taskID := args[2]
+		decision := strings.ToLower(args[3])
+		reasoning := strings.Join(args[4:], " ")
 
 		var approved bool
 		if decision == "approve" {
@@ -137,29 +141,32 @@ func main() {
 		jsonBytes, _ := json.MarshalIndent(payload, "", "  ")
 		addComment(taskID, string(jsonBytes))
 	case "approve":
-		if len(os.Args) < 3 {
+		if len(args) < 3 {
 			fmt.Println("Usage: build approve <task-id>")
 			os.Exit(1)
 		}
-		approveTask(os.Args[2])
+		approveTask(args[2])
 	case "redo":
-		if len(os.Args) < 3 {
+		if len(args) < 3 {
 			fmt.Println("Usage: build redo <task-id>")
 			os.Exit(1)
 		}
-		redoTask(os.Args[2])
+		redoTask(args[2])
 	case "init":
 		initProject()
 	case "teardown":
 		teardownProject()
 	case "enqueue":
-		if len(os.Args) < 3 {
+		if len(args) < 3 {
 			fmt.Println("Usage: build enqueue <plan file>")
 			os.Exit(1)
 		}
-		enqueuePlan(os.Args[2])
+		if err := enqueuePlan(args[2]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	default:
-		fmt.Printf("Unknown subcommand: %s\n", os.Args[1])
+		fmt.Printf("Unknown subcommand: %s\n", args[1])
 		os.Exit(1)
 	}
 }
@@ -606,10 +613,9 @@ func teardownProject() {
 	fmt.Println("Project torn down. .build/ directory removed.")
 }
 
-func enqueuePlan(planFile string) {
+func enqueuePlan(planFile string) error {
 	if _, err := os.Stat(planFile); os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Error: Plan file %s does not exist.\n", planFile)
-		os.Exit(1)
+		return fmt.Errorf("plan file %s does not exist", planFile)
 	}
 
 	base := filepath.Base(planFile)
@@ -622,9 +628,9 @@ func enqueuePlan(planFile string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error running breakdown: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error running breakdown: %w", err)
 	}
 
 	ingestTasks(outputDir)
+	return nil
 }
