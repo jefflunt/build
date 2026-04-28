@@ -61,6 +61,33 @@ func (r *Router) reconcile() error {
 		return nil
 	}
 
+	// 1.5. Check if blocked by ANY stuck task
+	var stuckID string
+	err = r.db.QueryRow("SELECT id FROM tasks WHERE status = 'stuck' LIMIT 1").Scan(&stuckID)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if stuckID != "" {
+		currentState := "stuck:" + stuckID
+		if r.lastPrintedState != currentState {
+			r.printTree(stuckID, 5, "")
+			fmt.Println("\nRouter delegating stalled task to Lead Engineer...")
+			r.lastPrintedState = currentState
+		}
+		
+		// Fetch info for the stuck task
+		var title string
+		var description sql.NullString
+		err = r.db.QueryRow("SELECT title, description FROM tasks WHERE id = ?", stuckID).Scan(&title, &description)
+		if err != nil {
+			return err
+		}
+		
+		// Process the stuck task as the Lead (Assignee 5)
+		r.processTask(stuckID, title, description.String, 5)
+		return nil
+	}
+
 	// 2. Find the next actionable 'todo' leaf task
 	row := r.db.QueryRow(`
 		SELECT t.id, t.title, t.description, t.agent_id 
@@ -132,6 +159,9 @@ func (r *Router) processTask(taskID, title, description string, assigneeID int) 
 	case 4:
 		roleFile = "templates/boss.md"
 		agentName = "build"
+	case 5:
+		roleFile = "templates/lead.md"
+		agentName = "build"
 	default:
 		return
 	}
@@ -191,8 +221,8 @@ func (r *Router) processTask(taskID, title, description string, assigneeID int) 
 func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSHA256 string, agentDuration int, agentName string) {
 	// Re-check status in case the agent (like Boss) changed it to 'done'
 	var status string
-	var attempts int
-	err := r.db.QueryRow("SELECT status, approval_attempts FROM tasks WHERE id = ?", taskID).Scan(&status, &attempts)
+	var attempts, leadInterventions int
+	err := r.db.QueryRow("SELECT status, approval_attempts, lead_interventions FROM tasks WHERE id = ?", taskID).Scan(&status, &attempts, &leadInterventions)
 	if err != nil {
 		fmt.Printf("Error checking task status: %v\n", err)
 	}
@@ -227,10 +257,19 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 			
 			attempts++
 			if attempts >= 3 {
-				r.db.Exec("UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = ? WHERE id = ?", attempts, taskID)
-				r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds, opencode_agent) VALUES (?, 1, 'task_rejected', ?, ?, ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion, totalDuration, agentName)
-				r.lastPrintedState = "failed:" + taskID
-				r.printTree("", 0, taskID)
+				if leadInterventions < 3 {
+					// Escalate to Lead
+					r.db.Exec("UPDATE tasks SET status = 'stuck', agent_id = 5, approval_attempts = 0, lead_interventions = lead_interventions + 1 WHERE id = ?", taskID)
+					r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds, opencode_agent) VALUES (?, 1, 'escalate_to_lead', ?, ?, ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion, totalDuration, agentName)
+					r.lastPrintedState = "stuck:" + taskID
+					r.printTree(taskID, 5, "")
+				} else {
+					// Hard failure
+					r.db.Exec("UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = ? WHERE id = ?", attempts, taskID)
+					r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds, opencode_agent) VALUES (?, 1, 'task_rejected', ?, ?, ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion, totalDuration, agentName)
+					r.lastPrintedState = "failed:" + taskID
+					r.printTree("", 0, taskID)
+				}
 			} else {
 				r.db.Exec("UPDATE tasks SET agent_id = 2, approval_attempts = ? WHERE id = ?", attempts, taskID)
 				r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds, opencode_agent) VALUES (?, 1, 'assign_to_dev', ?, ?, ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion, totalDuration, agentName)
@@ -314,9 +353,18 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 			attempts++
 			r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds, opencode_agent) VALUES (?, 1, 'task_rejected', ?, ?, ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion, agentDuration, agentName)
 			if attempts >= 3 {
-				r.db.Exec("UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = ? WHERE id = ?", attempts, taskID)
-				r.lastPrintedState = "failed:" + taskID
-				r.printTree("", 0, taskID)
+				if leadInterventions < 3 {
+					// Escalate to Lead
+					r.db.Exec("UPDATE tasks SET status = 'stuck', agent_id = 5, approval_attempts = 0, lead_interventions = lead_interventions + 1 WHERE id = ?", taskID)
+					r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds, opencode_agent) VALUES (?, 1, 'escalate_to_lead', ?, ?, ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion, agentDuration, agentName)
+					r.lastPrintedState = "stuck:" + taskID
+					r.printTree(taskID, 5, "")
+				} else {
+					// Hard failure
+					r.db.Exec("UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = ? WHERE id = ?", attempts, taskID)
+					r.lastPrintedState = "failed:" + taskID
+					r.printTree("", 0, taskID)
+				}
 			} else {
 				r.db.Exec("UPDATE tasks SET agent_id = 2, approval_attempts = ? WHERE id = ?", attempts, taskID)
 				r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds, opencode_agent) VALUES (?, 1, 'assign_to_dev', ?, ?, ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion, agentDuration, agentName)
@@ -324,6 +372,22 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 				r.printTree(taskID, 2, "")
 			}
 		}
+	case 5: // Lead finished
+		// Check if the Lead left a comment
+		var commentCount int
+		r.db.QueryRow("SELECT COUNT(*) FROM comments WHERE task_id = ? AND agent_id = 5", taskID).Scan(&commentCount)
+		
+		if commentCount == 0 {
+			// Lead failed to leave a comment, but we have to push it back to the dev anyway so it doesn't get stuck forever
+			// We'll leave an automated comment
+			r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 1, ?)", taskID, "System Note: The Lead Engineer reviewed the task but failed to leave explicit instructions. Developer, please carefully review the previous failures and try again.")
+		}
+
+		// Always push back to Dev after Lead intervention
+		r.db.Exec("UPDATE tasks SET status = 'todo', agent_id = 2 WHERE id = ?", taskID)
+		r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds, opencode_agent) VALUES (?, 1, 'assign_to_dev', ?, ?, ?, ?, ?, ?)", taskID, r.provider, r.model, instructionsSHA256, buildVersion, agentDuration, agentName)
+		r.lastPrintedState = fmt.Sprintf("active:%s:2", taskID)
+		r.printTree(taskID, 2, "")
 	}
 }
 
@@ -332,11 +396,23 @@ func (r *Router) kickBackToBoss(taskID string, errMsg string, instructionsSHA256
 	
 	attempts++
 
+	var leadInterventions int
+	r.db.QueryRow("SELECT lead_interventions FROM tasks WHERE id = ?", taskID).Scan(&leadInterventions)
+
 	if attempts >= 3 {
-		r.db.Exec("UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = ? WHERE id = ?", attempts, taskID)
-		r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds, opencode_agent) VALUES (?, 1, 'task_failed_max_attempts', ?, ?, ?, ?, 0, 'plan')", taskID, r.provider, r.model, instructionsSHA256, version.Version)
-		r.lastPrintedState = "failed:" + taskID
-		r.printTree("", 0, taskID)
+		if leadInterventions < 3 {
+			// Escalate to Lead
+			r.db.Exec("UPDATE tasks SET status = 'stuck', agent_id = 5, approval_attempts = 0, lead_interventions = lead_interventions + 1 WHERE id = ?", taskID)
+			r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds, opencode_agent) VALUES (?, 1, 'escalate_to_lead', ?, ?, ?, ?, 0, 'plan')", taskID, r.provider, r.model, instructionsSHA256, version.Version)
+			r.lastPrintedState = "stuck:" + taskID
+			r.printTree(taskID, 5, "")
+		} else {
+			// Hard failure
+			r.db.Exec("UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = ? WHERE id = ?", attempts, taskID)
+			r.db.Exec("INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, llm_instructions_sha256, build_version, duration_seconds, opencode_agent) VALUES (?, 1, 'task_failed_max_attempts', ?, ?, ?, ?, 0, 'plan')", taskID, r.provider, r.model, instructionsSHA256, version.Version)
+			r.lastPrintedState = "failed:" + taskID
+			r.printTree("", 0, taskID)
+		}
 		return
 	}
 
@@ -399,6 +475,8 @@ func (r *Router) printTree(activeID string, activeAssignee int, failedID string)
 			prefix = "\033[90m" // Medium Grey
 		} else if failedID != "" && id == failedID {
 			prefix = "\033[91m" // Light Red
+		} else if status == "stuck" {
+			prefix = "\033[96m" // Light Cyan
 		} else if id == activeID {
 			switch activeAssignee {
 			case 2:
@@ -407,6 +485,8 @@ func (r *Router) printTree(activeID string, activeAssignee int, failedID string)
 				prefix = "\033[93m" // Light Yellow
 			case 4:
 				prefix = "\033[92m" // Light Green
+			case 5:
+				prefix = "\033[96m" // Light Cyan
 			}
 		}
 

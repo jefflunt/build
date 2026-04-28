@@ -12,8 +12,10 @@ func InitDB(dbPath string) (*sql.DB, error) {
 	}
 
 	// Add opencode_agent column if it doesn't exist
-	_, err = db.Exec("ALTER TABLE audit_logs ADD COLUMN opencode_agent TEXT")
-	// Ignoring error in case column already exists
+	_, _ = db.Exec("ALTER TABLE audit_logs ADD COLUMN opencode_agent TEXT")
+	
+	// Add lead_interventions column if it doesn't exist
+	_, _ = db.Exec("ALTER TABLE tasks ADD COLUMN lead_interventions INTEGER DEFAULT 0")
 	
 	schema := `
 	CREATE TABLE IF NOT EXISTS tasks (
@@ -25,7 +27,8 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		status TEXT DEFAULT 'todo',
 		agent_id INTEGER,
 		touch_count INTEGER DEFAULT 0,
-		approval_attempts INTEGER DEFAULT 0
+		approval_attempts INTEGER DEFAULT 0,
+		lead_interventions INTEGER DEFAULT 0
 	);
 	CREATE TABLE IF NOT EXISTS agents (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,

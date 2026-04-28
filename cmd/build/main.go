@@ -66,6 +66,7 @@ func main() {
 			{"design", "start a new design interaction"},
 			{"ingest", "ingest breakdown output"},
 			{"context", "view task context and comments"},
+			{"why-failed", "get full context and audit history for a stalled task"},
 			{"comment", "add a comment to a task"},
 			{"review", "review a task (approve/reject) with reasoning"},
 			{"approve", "approve a task (boss only)"},
@@ -101,6 +102,12 @@ func main() {
 			os.Exit(1)
 		}
 		printContext(os.Args[2])
+	case "why-failed":
+		if len(os.Args) < 3 {
+			fmt.Println("Usage: build why-failed <task-id>")
+			os.Exit(1)
+		}
+		printWhyFailed(os.Args[2])
 	case "comment":
 		if len(os.Args) < 4 {
 			fmt.Println("Usage: build comment <task-id> <comment text...>")
@@ -410,7 +417,8 @@ func initProject() {
 		(1, 'owner', 'Owner'),
 		(2, 'dev', 'Developer'),
 		(3, 'tester', 'Tester'),
-		(4, 'boss', 'Boss')
+		(4, 'boss', 'Boss'),
+		(5, 'lead', 'Lead Engineer')
 	`)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to seed agents: %v\n", err)
@@ -498,6 +506,71 @@ func printContext(taskID string) {
 			var role, content string
 			rows.Scan(&role, &content)
 			fmt.Printf("%s: %s\n----------------------------------------\n", role, content)
+		}
+	}
+}
+
+func printWhyFailed(taskID string) {
+	database, err := db.InitDB(".build/build.db")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: .build/build.db not found or failed to init: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	var title, desc, status, role string
+	var approvalAttempts int
+	
+	err = database.QueryRow(`
+		SELECT t.title, t.description, t.status, t.approval_attempts, IFNULL(a.role, 'unassigned') 
+		FROM tasks t 
+		LEFT JOIN agents a ON t.agent_id = a.id 
+		WHERE t.id = ?`, taskID).Scan(&title, &desc, &status, &approvalAttempts, &role)
+	
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error fetching task: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("# Task: %s\n", taskID)
+	fmt.Printf("**Title:** %s\n", title)
+	fmt.Printf("**Status:** %s | **Approval Attempts:** %d\n", status, approvalAttempts)
+	fmt.Printf("**Current Assignee:** %s\n\n", role)
+	fmt.Printf("## Description\n%s\n\n", desc)
+
+	fmt.Println("## Audit Timeline")
+	auditRows, err := database.Query(`
+		SELECT a.role, al.action, al.duration_seconds, al.timestamp 
+		FROM audit_logs al 
+		JOIN agents a ON al.actor_id = a.id 
+		WHERE al.task_id = ? 
+		ORDER BY al.id ASC`, taskID)
+	
+	if err == nil {
+		defer auditRows.Close()
+		for auditRows.Next() {
+			var auditRole, action, timestamp string
+			var duration int
+			auditRows.Scan(&auditRole, &action, &duration, &timestamp)
+			fmt.Printf("- %s **%s** performed `%s` (Duration: %ds)\n", timestamp, auditRole, action, duration)
+		}
+	}
+	fmt.Println()
+
+	fmt.Println("## Comments History")
+	commentRows, err := database.Query(`
+		SELECT a.role, c.content, c.timestamp 
+		FROM comments c 
+		JOIN agents a ON c.agent_id = a.id 
+		WHERE c.task_id = ? 
+		ORDER BY c.id ASC`, taskID)
+	
+	if err == nil {
+		defer commentRows.Close()
+		for commentRows.Next() {
+			var commentRole, content, timestamp string
+			commentRows.Scan(&commentRole, &content, &timestamp)
+			fmt.Printf("### %s @ %s\n%s\n---\n", commentRole, timestamp, content)
 		}
 	}
 }
