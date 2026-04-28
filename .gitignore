@@ -1,10 +1,10 @@
-.DS_Store
+**/.DS_Store
 /data
 /build
 .build/
 /bin
-*.log
-tmp/
+**/*.log
+**/tmp/
 *.sqlite
 *.db
 *.breakdown_args
