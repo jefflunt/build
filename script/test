@@ -6,3 +6,4 @@ cd "$(dirname "$0")/.."
 
 echo "Running tests..."
 go test ./...
+./script/test_cli.sh
