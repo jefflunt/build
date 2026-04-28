@@ -222,6 +222,14 @@ func (r *Router) processTask(taskID, title, description string, assigneeID int) 
 	case 4: roleName = "Boss"
 	case 5: roleName = "Lead"
 	}
+	
+	// Update tree to show sweep is running
+	currentState := fmt.Sprintf("active:%s:6", taskID)
+	if r.lastPrintedState != currentState {
+		r.printTree(taskID, 6, "")
+		r.lastPrintedState = currentState
+	}
+	
 	r.runSweepAndCommit(taskID, roleName)
 
 	// Post-session logic
@@ -497,6 +505,8 @@ func (r *Router) printTree(activeID string, activeAssignee int, failedID string)
 				prefix = "\033[92m" // Light Green
 			case 5:
 				prefix = "\033[96m" // Light Cyan
+			case 6:
+				prefix = "\033[30;47m" // Black text on White background
 			}
 		}
 
