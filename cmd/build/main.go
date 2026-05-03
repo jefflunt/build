@@ -419,6 +419,10 @@ func writeTestAdapter(dir string) {
 # This script acts as an adapter for the build orchestrator.
 # The orchestrator will automatically run this script after a Tester agent finishes.
 # Update this file to execute your project's actual test runner (e.g., 'npm test', 'go test ./...', etc.)
+#
+# NOTE: The orchestrator enforces a strict 30-second timeout on this script.
+# Tests must be fast, isolated unit tests. Integration tests are not supported here.
+#
 # If no tests exist yet, simply exit 0 to satisfy the automation pipeline.
 
 exit 0

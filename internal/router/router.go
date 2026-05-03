@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"embed"
@@ -263,14 +264,22 @@ func (r *Router) handlePostSession(taskID string, assigneeID int, instructionsSH
 	case 3: // Tester finished -> Run tests
 		fmt.Println("Running test suite...")
 		testStartTime := time.Now()
-		testCmd := exec.Command("./.build/test")
+		
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		testCmd := exec.CommandContext(ctx, "./.build/test")
 		out, err := testCmd.CombinedOutput()
 		testDuration := int(time.Since(testStartTime).Seconds())
 		totalDuration := agentDuration + testDuration
 		
 		if err != nil {
 			fmt.Printf("Tests failed. Kicking back to Dev.\n")
-			commentText := fmt.Sprintf("Tests failed:\n```\n%s\n```", string(out))
+			var commentText string
+			if ctx.Err() == context.DeadlineExceeded {
+				commentText = fmt.Sprintf("Tests failed: Execution timed out after 30 seconds. Your tests are running too slowly. This usually means you are making real network requests, hitting a real database, or have inefficient loops. Please refactor the codebase to isolate I/O and use mocks/stubs in your tests.\n\nPartial output:\n```\n%s\n```", string(out))
+			} else {
+				commentText = fmt.Sprintf("Tests failed:\n```\n%s\n```", string(out))
+			}
 			r.db.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, 3, ?)", taskID, commentText)
 			
 			attempts++
