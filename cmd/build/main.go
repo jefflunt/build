@@ -17,6 +17,7 @@ import (
 
 	"github.com/jefflunt/build/internal/db"
 	"github.com/jefflunt/build/internal/router"
+	"github.com/jefflunt/build/internal/timecmd"
 	"github.com/jefflunt/build/pkg/version"
 )
 
@@ -76,6 +77,7 @@ func runCLI(args []string) {
 			{"init", "initialize the project"},
 			{"teardown", "remove the .build project directory"},
 			{"enqueue", "enqueue a plan file"},
+			{"time", "show rolled-up time spent on tasks"},
 			{"version", "show the build version"},
 		}
 		for _, c := range commands {
@@ -165,6 +167,8 @@ func runCLI(args []string) {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "time":
+		printTime()
 	default:
 		fmt.Printf("Unknown subcommand: %s\n", args[1])
 		os.Exit(1)
@@ -638,3 +642,21 @@ func enqueuePlan(planFile string) error {
 	ingestTasks(outputDir)
 	return nil
 }
+
+func printTime() {
+	database, err := db.InitDB(".build/build.db")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: .build/build.db not found or failed to init: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	roots, err := timecmd.BuildTimeTree(database)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error building time tree: %v\n", err)
+		os.Exit(1)
+	}
+
+	timecmd.PrintTimeTree(roots, 0)
+}
+
