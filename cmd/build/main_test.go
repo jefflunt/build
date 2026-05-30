@@ -8,6 +8,49 @@ import (
 	"testing"
 )
 
+
+func TestWalkBreakdownDir(t *testing.T) {
+	// Setup mock directory
+	tempDir, err := os.MkdirTemp("", "breakdown-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create root README.md
+	os.WriteFile(filepath.Join(tempDir, "README.md"), []byte("# Root Title\nRoot Description"), 0644)
+
+	// Create child directory
+	childDir := filepath.Join(tempDir, "child1")
+	os.Mkdir(childDir, 0755)
+	os.WriteFile(filepath.Join(childDir, "README.md"), []byte("# Child Title\nChild Description"), 0644)
+	os.WriteFile(filepath.Join(childDir, "task1.md"), []byte("# Task1 Title\nTask1 Description"), 0644)
+
+	// Run walkBreakdownDir
+	node, err := walkBreakdownDir(tempDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if node.Title != "Root Title" {
+		t.Errorf("expected Root Title, got %s", node.Title)
+	}
+	if len(node.Children) != 1 {
+		t.Fatalf("expected 1 child, got %d", len(node.Children))
+	}
+
+	child := node.Children[0]
+	if child.Title != "Child Title" {
+		t.Errorf("expected Child Title, got %s", child.Title)
+	}
+	if len(child.Children) != 1 {
+		t.Fatalf("expected 1 task in child, got %d", len(child.Children))
+	}
+	if child.Children[0].Title != "Task1 Title" {
+		t.Errorf("expected Task1 Title, got %s", child.Children[0].Title)
+	}
+}
+
 func TestValidateLLMConfig(t *testing.T) {
 	// Setup: unset env vars
 	os.Unsetenv("BUILD_LLM_PROVIDER")
