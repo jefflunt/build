@@ -8,3 +8,9 @@
 *.sqlite
 *.db
 *.breakdown_args
+# Compiled binaries
+*.exe
+*.o
+*.out
+*.so
+*.a
