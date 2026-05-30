@@ -198,7 +198,50 @@ func seedDB() {
 	}
 }
 
+func validateLLMConfig() {
+	provider := os.Getenv("BUILD_LLM_PROVIDER")
+	model := os.Getenv("BUILD_LLM_MODEL")
+
+	if provider != "" && model != "" {
+		return
+	}
+
+	fmt.Println("Error: BUILD_LLM_PROVIDER and BUILD_LLM_MODEL environment variables must be set.")
+	fmt.Println()
+
+	// Attempt to get valid models
+	models := getValidModels()
+
+	fmt.Println("Suggested models:")
+	for _, m := range models {
+		fmt.Printf("  %s\n", m)
+	}
+	fmt.Println()
+
+	fmt.Println("Setup Guide:")
+	fmt.Println("  export BUILD_LLM_PROVIDER=<provider>")
+	fmt.Println("  export BUILD_LLM_MODEL=<model>")
+	fmt.Println("  # Example:")
+	fmt.Println("  export BUILD_LLM_PROVIDER=google")
+	fmt.Println("  export BUILD_LLM_MODEL=gemini-3.1-flash-lite-preview")
+	fmt.Println()
+	os.Exit(1)
+}
+
+func getValidModels() []string {
+	cmd := exec.Command("opencode", "models")
+	output, err := cmd.Output()
+	if err != nil {
+		// Fallback
+		return []string{"gemini-3.1-flash-lite-preview", "gemini-3.1-pro", "gpt-4o"}
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	return lines
+}
+
 func runRouter() {
+	validateLLMConfig()
 	// Check if initialized
 	if _, err := os.Stat(".build"); os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "Error: Project not initialized. Run 'build init' first.\n")
