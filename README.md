@@ -106,11 +106,20 @@ go test ./...
 ---
 
 ### 5. Start the Orchestrator
-To process enqueued tasks, run the background loop:
+To process enqueued tasks, run the background loop. The `build start` command requires the following environment variables to be set:
+
+- `BUILD_LLM_PROVIDER`: The LLM provider (e.g., `openai`, `anthropic`, `google`).
+- `BUILD_LLM_MODEL`: The specific model to use (e.g., `gpt-4o`, `claude-3-5-sonnet`).
+
+You can set these in your shell session:
 
 ```bash
+export BUILD_LLM_PROVIDER="your-provider"
+export BUILD_LLM_MODEL="your-model"
 build start
 ```
+
+Or add them to your environment configuration (e.g., `~/.bashrc`, `~/.zshrc`).
 
 This command starts a live console display showing the task tree status represented by active agents:
 - **Grey**: Task is complete (`done`).
