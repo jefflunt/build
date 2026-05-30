@@ -207,6 +207,12 @@ func validateLLMConfig(out io.Writer) int {
 	}
 
 	fmt.Fprintln(out, "Error: BUILD_LLM_PROVIDER and BUILD_LLM_MODEL environment variables must be set.")
+	if provider == "" {
+		fmt.Fprintf(out, "  - BUILD_LLM_PROVIDER is missing.\n")
+	}
+	if model == "" {
+		fmt.Fprintf(out, "  - BUILD_LLM_MODEL is missing.\n")
+	}
 	fmt.Fprintln(out)
 
 	// Attempt to get valid models
@@ -274,13 +280,7 @@ func runRouter() {
 
 	// Start Router
 	provider := os.Getenv("BUILD_LLM_PROVIDER")
-	if provider == "" {
-		provider = "google"
-	}
 	model := os.Getenv("BUILD_LLM_MODEL")
-	if model == "" {
-		model = "gemini-3.1-flash-lite-preview"
-	}
 
 	r := router.NewRouter(database, provider, model, agentInstructions)
 	go r.Run()

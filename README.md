@@ -106,7 +106,7 @@ go test ./...
 ---
 
 ### 5. Start the Orchestrator
-To process enqueued tasks, run the background loop. The `build start` command requires the following environment variables to be set:
+To process enqueued tasks, run the background loop. The `build start` command strictly requires the following environment variables. If either variable is missing, the orchestrator will halt execution and display a setup guide:
 
 - `BUILD_LLM_PROVIDER`: The LLM provider (e.g., `openai`, `anthropic`, `google`).
 - `BUILD_LLM_MODEL`: The specific model to use (e.g., `gpt-4o`, `claude-3-5-sonnet`).
