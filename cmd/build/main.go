@@ -37,7 +37,6 @@ func generateID() string {
 	return hex.EncodeToString(bytes)
 }
 
-
 //go:embed templates/*.md
 var agentInstructions embed.FS
 
@@ -264,7 +263,7 @@ func runRouter() {
 		fmt.Fprintf(os.Stderr, "Failed to write PID: %v\n", err)
 		os.Exit(1)
 	}
-	defer os.Remove(pidDir+"/router.pid")
+	defer os.Remove(pidDir + "/router.pid")
 
 	// Setup signal handling
 	sigChan := make(chan os.Signal, 1)
@@ -286,7 +285,6 @@ func runRouter() {
 	<-sigChan
 	fmt.Println("Router stopped.")
 }
-
 
 func ingestTasks(targetPath string) {
 	info, err := os.Stat(targetPath)
@@ -355,7 +353,7 @@ func walkBreakdownDir(dirPath string, parentID string) (*Node, error) {
 		}
 
 		childPath := filepath.Join(dirPath, entry.Name())
-		
+
 		if entry.IsDir() {
 			childNode, err := walkBreakdownDir(childPath, node.ID)
 			if err != nil {
@@ -533,13 +531,13 @@ func printWhyFailed(taskID string) {
 
 	var title, desc, status, role string
 	var approvalAttempts int
-	
+
 	err = database.QueryRow(`
 		SELECT t.title, t.description, t.status, t.approval_attempts, IFNULL(a.role, 'unassigned') 
 		FROM tasks t 
 		LEFT JOIN agents a ON t.agent_id = a.id 
 		WHERE t.id = ?`, taskID).Scan(&title, &desc, &status, &approvalAttempts, &role)
-	
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error fetching task: %v\n", err)
 		os.Exit(1)
@@ -558,7 +556,7 @@ func printWhyFailed(taskID string) {
 		JOIN agents a ON al.actor_id = a.id 
 		WHERE al.task_id = ? 
 		ORDER BY al.id ASC`, taskID)
-	
+
 	if err == nil {
 		defer auditRows.Close()
 		for auditRows.Next() {
@@ -577,7 +575,7 @@ func printWhyFailed(taskID string) {
 		JOIN agents a ON c.agent_id = a.id 
 		WHERE c.task_id = ? 
 		ORDER BY c.id ASC`, taskID)
-	
+
 	if err == nil {
 		defer commentRows.Close()
 		for commentRows.Next() {
@@ -598,7 +596,7 @@ func addComment(taskID, comment string) {
 
 	var agentID sql.NullInt64
 	err = database.QueryRow("SELECT agent_id FROM tasks WHERE id = ?", taskID).Scan(&agentID)
-	
+
 	// Fallback to Owner (1)
 	assignee := 1
 	if err == nil && agentID.Valid {
@@ -630,7 +628,7 @@ func approveTask(taskID string) {
 
 	// 2. Add an audit log entry
 	database.Exec("INSERT INTO audit_logs (task_id, actor_id, action, build_version) VALUES (?, 1, 'task_approved', ?)", taskID, version.Version)
-	
+
 	fmt.Printf("Task %s approved and marked as done.\n", taskID)
 }
 
@@ -655,7 +653,7 @@ func teardownProject() {
 		fmt.Println("Project not initialized. Nothing to tear down.")
 		return
 	}
-	
+
 	err := os.RemoveAll(".build")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to remove .build directory: %v\n", err)
@@ -702,4 +700,3 @@ func printTime() {
 
 	timecmd.PrintTimeTree(roots, 0)
 }
-

@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -17,7 +16,7 @@ func TestGetValidModels(t *testing.T) {
 
 	// Create a mock opencode script
 	mockOpencodePath := filepath.Join(tempDir, "opencode")
-	
+
 	// Create a script that prints mock models and exits 0
 	scriptContent := `#!/usr/bin/env bash
 echo "gemini-1.5-pro"
