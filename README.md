@@ -35,29 +35,44 @@ The command creates a hidden `.build/` directory containing:
 
 ---
 
-### 2. Write the Plan
-Plans must be written in Markdown format. A plan is defined by a single high-level Goal and a list of hierarchical Tasks.
+### 2. Collaborate on the Plan with an AI Agent
+Do not write plans by hand. Instead, collaborate with an AI agent of your choice—such as the `breakdown-design-and-build` agent—to explore your requirements, architecture, and constraints. Instruct the agent to generate and format the design plan for you.
 
-Create `my-feature.md`:
+The agent will draft an authoritative design file (typically named `design.md`) which serves as the source of truth for the implementation. As a user, you do not need to manually define "Atomic" or "Composite" tasks; the underlying `breakdown` utility automatically determines the task structure and dependencies during the ingestion phase.
+
+Here is an example of a generated `design.md` file produced by your AI design partner:
+
 ```markdown
-# Goal
-Build a JSON-based calculator CLI tool in Go.
+# Build JSON Calculator CLI
 
-# Tasks
-## Composite: Project Scaffolding
-- Atomic: Initialize Go module and setup main entry point
-- Atomic: Setup standard input/output handling
+## User Story
+- **Headline**: Create a JSON-based command-line calculator in Go.
+- **Problem Statement**: Users need a fast, non-interactive command-line tool that accepts mathematical expressions or JSON-formatted inputs and outputs the result in structured JSON.
+- **Objective**: Implement addition, subtraction, multiplication, and division operations with error handling for divide-by-zero.
+- **Expected Outcome**: Running `./calculator -json '{"op":"/","a":10,"b":2}'` outputs `{"result":5,"error":""}`.
 
-## Composite: Core Calculator Logic
-- Atomic: Implement addition and subtraction functions
-- Atomic: Implement multiplication and division functions
-- Atomic: Handle divide-by-zero errors and return formatted JSON error output
+## Implementation Backlog
 
-## Composite: CLI Parsing
-- Atomic: Parse mathematical operations from JSON flags
+### Pending
+- `scaffold-module`: Initialize the Go module and verify basic build command.
+- `std-io-handler`: Implement standard input/output parsing logic.
+- `calc-addition-subtraction`: Implement core addition and subtraction functions.
+- `calc-multiplication-division`: Implement core multiplication and division functions.
+- `calc-error-handling`: Handle division by zero and generate formatted JSON error outputs.
+- `cli-json-parser`: Parse operations directly from JSON-formatted command-line flags.
+
+### Current
+
+### Completed
+
+## Architecture Overview
+The application is a single-binary CLI tool written in Go. It reads JSON input from flags or standard input, maps it to a calculator struct, performs the operation, and prints the result struct as a JSON string to standard output.
+
+## Checklist & TDD Requirements
+1. **Time Formatter & Limits**: All operations must execute in under 100ms.
+2. **Unit Tests**: Every core mathematical function must be covered by isolated unit tests with zero external I/O.
+3. **Robustness**: Rejects invalid JSON structures and zero-divisors with non-zero exit codes.
 ```
-
-*Note: Grouping headers should be prefixed with `Composite:`, and leaf-node tasks should be prefixed with `Atomic:`.*
 
 ---
 
