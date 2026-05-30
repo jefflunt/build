@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -19,11 +20,34 @@ func TestValidateLLMConfig(t *testing.T) {
 		t.Errorf("expected exit code 1, got %d", code)
 	}
 
-	if buf.Len() == 0 {
-		t.Error("expected output, got none")
+	output := buf.String()
+	if !strings.Contains(output, "BUILD_LLM_PROVIDER is missing") {
+		t.Error("expected output to mention BUILD_LLM_PROVIDER is missing")
+	}
+	if !strings.Contains(output, "BUILD_LLM_MODEL is missing") {
+		t.Error("expected output to mention BUILD_LLM_MODEL is missing")
 	}
 
-	// Setup: set env vars
+	// Setup: set one env var
+	os.Setenv("BUILD_LLM_PROVIDER", "google")
+	os.Unsetenv("BUILD_LLM_MODEL")
+
+	buf.Reset()
+	code = validateLLMConfig(&buf)
+
+	if code != 1 {
+		t.Errorf("expected exit code 1, got %d", code)
+	}
+
+	output = buf.String()
+	if strings.Contains(output, "BUILD_LLM_PROVIDER is missing") {
+		t.Error("expected output NOT to mention BUILD_LLM_PROVIDER is missing")
+	}
+	if !strings.Contains(output, "BUILD_LLM_MODEL is missing") {
+		t.Error("expected output to mention BUILD_LLM_MODEL is missing")
+	}
+
+	// Setup: set both env vars
 	os.Setenv("BUILD_LLM_PROVIDER", "google")
 	os.Setenv("BUILD_LLM_MODEL", "gemini-pro")
 
