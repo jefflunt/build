@@ -1,10 +1,43 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func TestValidateLLMConfig(t *testing.T) {
+	// Setup: unset env vars
+	os.Unsetenv("BUILD_LLM_PROVIDER")
+	os.Unsetenv("BUILD_LLM_MODEL")
+
+	var buf bytes.Buffer
+	code := validateLLMConfig(&buf)
+
+	if code != 1 {
+		t.Errorf("expected exit code 1, got %d", code)
+	}
+
+	if buf.Len() == 0 {
+		t.Error("expected output, got none")
+	}
+
+	// Setup: set env vars
+	os.Setenv("BUILD_LLM_PROVIDER", "google")
+	os.Setenv("BUILD_LLM_MODEL", "gemini-pro")
+
+	buf.Reset()
+	code = validateLLMConfig(&buf)
+
+	if code != 0 {
+		t.Errorf("expected exit code 0, got %d", code)
+	}
+
+	if buf.Len() != 0 {
+		t.Errorf("expected no output, got: %s", buf.String())
+	}
+}
 
 func TestGetValidModels(t *testing.T) {
 	// Create a temporary directory for the mock command

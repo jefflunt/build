@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -197,34 +198,34 @@ func seedDB() {
 	}
 }
 
-func validateLLMConfig() {
+func validateLLMConfig(out io.Writer) int {
 	provider := os.Getenv("BUILD_LLM_PROVIDER")
 	model := os.Getenv("BUILD_LLM_MODEL")
 
 	if provider != "" && model != "" {
-		return
+		return 0
 	}
 
-	fmt.Println("Error: BUILD_LLM_PROVIDER and BUILD_LLM_MODEL environment variables must be set.")
-	fmt.Println()
+	fmt.Fprintln(out, "Error: BUILD_LLM_PROVIDER and BUILD_LLM_MODEL environment variables must be set.")
+	fmt.Fprintln(out)
 
 	// Attempt to get valid models
 	models := getValidModels()
 
-	fmt.Println("Suggested models:")
+	fmt.Fprintln(out, "Suggested models:")
 	for _, m := range models {
-		fmt.Printf("  %s\n", m)
+		fmt.Fprintf(out, "  %s\n", m)
 	}
-	fmt.Println()
+	fmt.Fprintln(out)
 
-	fmt.Println("Setup Guide:")
-	fmt.Println("  export BUILD_LLM_PROVIDER=<provider>")
-	fmt.Println("  export BUILD_LLM_MODEL=<model>")
-	fmt.Println("  # Example:")
-	fmt.Println("  export BUILD_LLM_PROVIDER=google")
-	fmt.Println("  export BUILD_LLM_MODEL=gemini-3.1-flash-lite-preview")
-	fmt.Println()
-	os.Exit(1)
+	fmt.Fprintln(out, "Setup Guide:")
+	fmt.Fprintln(out, "  export BUILD_LLM_PROVIDER=<provider>")
+	fmt.Fprintln(out, "  export BUILD_LLM_MODEL=<model>")
+	fmt.Fprintln(out, "  # Example:")
+	fmt.Fprintln(out, "  export BUILD_LLM_PROVIDER=google")
+	fmt.Fprintln(out, "  export BUILD_LLM_MODEL=gemini-3.1-flash-lite-preview")
+	fmt.Fprintln(out)
+	return 1
 }
 
 func getValidModels() []string {
@@ -240,7 +241,9 @@ func getValidModels() []string {
 }
 
 func runRouter() {
-	validateLLMConfig()
+	if code := validateLLMConfig(os.Stdout); code != 0 {
+		os.Exit(code)
+	}
 	// Check if initialized
 	if _, err := os.Stat(".build"); os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "Error: Project not initialized. Run 'build init' first.\n")
