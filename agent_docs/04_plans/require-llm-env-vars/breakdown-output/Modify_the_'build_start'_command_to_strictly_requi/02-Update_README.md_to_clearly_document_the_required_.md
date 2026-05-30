@@ -1,0 +1,3 @@
+# Update README.md to clearly document the required BUILD_LLM_PROVIDER and BUILD_LLM_MODEL environment variables for the build start command, ensuring any references to default models are removed.
+
+Update the `README.md` file to explicitly state that `BUILD_LLM_PROVIDER` and `BUILD_LLM_MODEL` are mandatory environment variables for the `build start` command. Ensure that any previous documentation mentioning fallback or default models is completely removed. Add instructions on how users can set these variables in their shell or environment configuration, aligning with the new strict requirements of the application.
