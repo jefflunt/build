@@ -32,7 +32,7 @@ func NewRouter(db *sql.DB, provider, model string, templatesFS embed.FS) *Router
 
 // Run starts the persistent reconciliation loop.
 func (r *Router) Run() error {
-	fmt.Println("Router service started...")
+	fmt.Printf("Router service started (provider: %s, model: %s)...\n", r.provider, r.model)
 	for {
 		if err := r.reconcile(); err != nil {
 			fmt.Printf("Error reconciling: %v\n", err)
