@@ -240,9 +240,12 @@ func validateLLMConfig(out io.Writer) int {
 func getValidModels() []string {
 	var client cli.Client
 	cfg, err := config.Load()
-	if err == nil && cfg != nil && cfg.CLIName == "opencode" {
-		client = cli.NewOpencodeClient()
-	} else {
+	if err == nil && cfg != nil {
+		if c, err := cli.NewClient(cfg.CLIName); err == nil {
+			client = c
+		}
+	}
+	if client == nil {
 		client = cli.NewOpencodeClient()
 	}
 
@@ -262,10 +265,8 @@ func runRouter() {
 		os.Exit(1)
 	}
 
-	var client cli.Client
-	if cfg.CLIName == "opencode" {
-		client = cli.NewOpencodeClient()
-	} else {
+	client, err := cli.NewClient(cfg.CLIName)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unsupported agent_adapter CLI: %s\n", cfg.CLIName)
 		os.Exit(1)
 	}

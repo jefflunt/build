@@ -19,6 +19,35 @@ func TestNewOpencodeClient(t *testing.T) {
 	}
 }
 
+func TestNewClient(t *testing.T) {
+	t.Run("supported cliName", func(t *testing.T) {
+		client, err := NewClient("opencode")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client == nil {
+			t.Fatal("expected non-nil client")
+		}
+		opClient, ok := client.(*OpencodeClient)
+		if !ok {
+			t.Fatal("expected OpencodeClient type")
+		}
+		if opClient.BinaryPath != "opencode" {
+			t.Errorf("expected BinaryPath 'opencode', got %q", opClient.BinaryPath)
+		}
+	})
+
+	t.Run("unsupported cliName", func(t *testing.T) {
+		client, err := NewClient("unsupported_cli")
+		if err == nil {
+			t.Fatal("expected error for unsupported cli, got nil")
+		}
+		if client != nil {
+			t.Errorf("expected nil client for unsupported cli, got %v", client)
+		}
+	})
+}
+
 func TestOpencodeClient_Run(t *testing.T) {
 	tests := []struct {
 		name         string

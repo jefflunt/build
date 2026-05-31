@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"io"
 )
 
@@ -13,4 +14,14 @@ type Client interface {
 
 	// Models retrieves the list of supported/available LLM models from the CLI tool.
 	Models(ctx context.Context) ([]string, error)
+}
+
+// NewClient creates a new Client implementation for the given CLI name.
+func NewClient(cliName string) (Client, error) {
+	switch cliName {
+	case "opencode":
+		return NewOpencodeClient(), nil
+	default:
+		return nil, fmt.Errorf("unsupported agent_adapter CLI: %s", cliName)
+	}
 }
