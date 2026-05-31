@@ -1,0 +1,5 @@
+# Implement the interactive CLI logic for the `rmcmd` package, accepting an `io.Reader` for standard input, resolving task descendants, presenting a summary, prompting for user confirmation, and triggering the database deletion.
+
+This task focuses on implementing the interactive CLI execution logic for the `build rm` command within the `internal/rmcmd` package. The implementation should accept the user's criteria (ID or status) and use it to resolve the target tasks and all their descendants recursively. Once the list of affected tasks is calculated, the system must display a comprehensive summary to the user. 
+
+Following the summary presentation, the logic must prompt the user for confirmation to proceed with the deletion. This prompt mechanism needs to accept an `io.Reader` to handle input safely and make the command testable in an automated fashion. If the user provides a 'y' or 'Y' response, the logic will trigger the actual deletion process, which safely purges the records from the corresponding database tables. Any other input should cleanly abort the process.

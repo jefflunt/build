@@ -1,0 +1,3 @@
+# Implement the CLI parsing and routing for the `build rm` subcommand in `cmd/build/main.go` and `internal/cli`. Ensure it validates arguments properly, prints standard usage instructions for invalid syntax, and routes valid invocations to `internal/rmcmd`.
+
+This task involves modifying the main application entry point (`cmd/build/main.go`) and the CLI parsing package (`internal/cli`) to support the new `rm` subcommand. The implementation must parse the `rm` command and its expected arguments (such as task IDs or status flags). If invalid syntax is provided, it should cleanly output usage instructions. For successful parses, it should route the execution to a dedicated `internal/rmcmd` package where the business logic for deleting tasks will reside.
