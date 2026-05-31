@@ -21,6 +21,7 @@ import (
 	"github.com/jefflunt/build/internal/config"
 	"github.com/jefflunt/build/internal/db"
 	"github.com/jefflunt/build/internal/router"
+	"github.com/jefflunt/build/internal/rmcmd"
 	"github.com/jefflunt/build/internal/timecmd"
 	"github.com/jefflunt/build/pkg/version"
 )
@@ -81,6 +82,7 @@ func runCLI(args []string) {
 			{"teardown", "remove the .build project directory"},
 			{"enqueue", "enqueue a plan file"},
 			{"time", "show rolled-up time spent on tasks"},
+			{"rm", "remove a task and its descendants by ID or status"},
 			{"version", "show the build version"},
 		}
 		for _, c := range commands {
@@ -172,6 +174,12 @@ func runCLI(args []string) {
 		}
 	case "time":
 		printTime()
+	case "rm":
+		if len(args) < 3 {
+			fmt.Println("Usage: build rm <id:<task-id>|status:<status>>")
+			os.Exit(1)
+		}
+		runRM(args[2])
 	default:
 		fmt.Printf("Unknown subcommand: %s\n", args[1])
 		os.Exit(1)
@@ -733,4 +741,20 @@ func printTime() {
 	}
 
 	timecmd.PrintTimeTree(roots, 0)
+}
+
+func runRM(target string) {
+	database, err := db.InitDB(".build/build.db")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: .build/build.db not found or failed to init: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	dbWrapper := rmcmd.NewSQLDB(database)
+	err = rmcmd.ExecuteRM(dbWrapper, os.Stdin, os.Stdout, target)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }
