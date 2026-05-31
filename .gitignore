@@ -1,4 +1,5 @@
 **/.DS_Store
+**/._*
 Thumbs.db
 Desktop.ini
 .Spotlight-V100
@@ -13,7 +14,12 @@ Desktop.ini
 *.sqlite
 *.db
 *.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
 *.breakdown_args
+*.pid
+
 # Compiled binaries
 *.exe
 *.o
@@ -24,7 +30,13 @@ Desktop.ini
 *.a
 *.test
 *.prof
-# IDEs and editors
+
+# IDEs, editors and local configs
 .vscode/
 .idea/
 *.swp
+go.work
+go.work.sum
+.env
+.env.local
+*.env
