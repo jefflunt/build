@@ -25,15 +25,15 @@
 ## Implementation Backlog
 
 ### Pending
+
+### Current
+
+### Completed
 - `[TEST-UNIT]` Create `cmd/build/main_test.go` and write tests for `ValidateLLMEnv`.
 - `[LOGIC]` Implement `ValidateLLMEnv(provider, model string) error` in `cmd/build/main.go`.
 - `[LOGIC]` Implement dynamic model suggestions by invoking `opencode models` with a graceful static fallback if the command fails.
 - `[CLI]` Integrate `ValidateLLMEnv` check inside `runRouter()` in `cmd/build/main.go` to exit `1` and output help text on error.
 - `[DOCS]` Update `README.md` to remove references to default provider/model and document the new env requirements.
-
-### Current
-
-### Completed
 
 ## Architecture Overview
 

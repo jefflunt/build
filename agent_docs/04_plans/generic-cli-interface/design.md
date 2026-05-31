@@ -54,16 +54,15 @@ If the configuration file is missing, we will halt with a helpful instruction on
 ## Implementation Backlog
 
 ### Pending
+
+### Current
+
+### Completed
+- `[DESIGN]` Align and approve design file.
 - `[CONFIG]` Implement `~/.build/config.yml` parser that reads the user's home directory configuration and parses the `agent_adapter: <name>:<provider>/<model>` format.
 - `[INTERFACE]` Define the `cli.Client` interface and the initial `opencode` driver implementing this interface.
 - `[INTEGRATION]` Refactor `cmd/build/main.go` and `internal/router/router.go` to use the new `cli.Client` abstraction instead of hardcoded environment variables and `opencode` exec calls.
 - `[VERIFICATION]` Ensure all existing tests pass and verify the behavior using mock interfaces or a test driver.
-
-### Current
-- `[DESIGN]` Align and approve design file.
-
-### Completed
-- None
 
 ## Checklist & TDD Requirements
 1. **Config Parser Unit Tests**: Write unit tests to verify that `~/.build/config.yml` is parsed correctly under different scenarios (missing file, invalid format, correct format).

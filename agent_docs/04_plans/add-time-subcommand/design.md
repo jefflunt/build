@@ -19,6 +19,10 @@ The user can run `build time` and see an output similar to:
 ## Implementation Backlog
 
 ### Pending
+
+### Current
+
+### Completed
 - `[CLI]` Update `cmd/build/main.go` help text to include the `time` subcommand.
 - `[CLI]` Update `cmd/build/main.go` `runCLI` switch statement to route `"time"` to a new `printTime()` function.
 - `[DB]` Implement database query logic to fetch all tasks where `status = 'done'`.
@@ -28,12 +32,6 @@ The user can run `build time` and see an output similar to:
 - `[CLI]` Implement the recursive rendering function to print the indented tree view to standard out.
 - `[TEST-UNIT]` Write tests for the time formatting function.
 - `[TEST-UNIT]` Write tests for the tree calculation logic.
-
-### Current
-- 
-
-### Completed
-- 
 
 ## Architecture Overview
 
