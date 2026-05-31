@@ -4,6 +4,12 @@ Thumbs.db
 Desktop.ini
 .Spotlight-V100
 .Trashes
+.AppleDouble
+.LSOverride
+.DocumentRevisions-V100
+.fseventsd
+.VolumeIcon.icns
+.apdisk
 /data
 /build
 .build/
@@ -30,6 +36,7 @@ Desktop.ini
 *.a
 *.test
 *.prof
+*.coverprofile
 
 # IDEs, editors and local configs
 .vscode/
