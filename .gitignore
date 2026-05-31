@@ -1,20 +1,26 @@
 **/.DS_Store
 Thumbs.db
 Desktop.ini
+.Spotlight-V100
+.Trashes
 /data
 /build
 .build/
 /bin
 **/*.log
 **/tmp/
+**/log/
 *.sqlite
 *.db
+*.sqlite3
 *.breakdown_args
 # Compiled binaries
 *.exe
 *.o
 *.out
 *.so
+*.dylib
+*.dll
 *.a
 *.test
 *.prof
