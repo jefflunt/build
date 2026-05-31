@@ -3,7 +3,7 @@
 ## User Story
 - **Headline**: Support multiple LLM CLIs through a generic, unified interface.
 - **Problem Statement**: The orchestrator in `build` is currently hardcoded to use the `opencode` CLI. Users cannot use alternative LLM providers or orchestration tools such as `copilot` CLI or Google's `antigravity` CLI. Furthermore, LLM configurations are managed solely via environment variables (`BUILD_LLM_PROVIDER` and `BUILD_LLM_MODEL`), which is difficult to manage across multiple projects.
-- **Objective**: Introduce a unified, generic CLI interface configured via `~/.build/config.yml`. Decouple the orchestrator logic from the specific LLM executable. Implement a hardcoded driver pattern where the configuration string specifies the CLI name, provider, and model in an easy-to-parse format (e.g., `cli: <name>:<provider>/<model>`).
+- **Objective**: Introduce a unified, generic CLI interface configured via `~/.build/config.yml`. Decouple the orchestrator logic from the specific LLM executable. Implement a hardcoded driver pattern where the configuration string specifies the CLI name, provider, and model in an easy-to-parse format (e.g., `agent_adapter: <name>:<provider>/<model>`).
 - **Expected Outcome**: The user can configure the active CLI and model in `~/.build/config.yml`. The router process runs seamlessly with `opencode` using the new abstraction, and future developers can easily add drivers for `copilot` and `antigravity` by implementing the simple interface.
 
 ## Architecture Overview
@@ -36,7 +36,7 @@ type Client interface {
 ### Configuration Parsing
 We will parse `~/.build/config.yml` for configuration. The file will contain:
 ```yaml
-cli: "opencode:google/gemini-3.5-flash"
+agent_adapter: "opencode:google/gemini-3.5-flash"
 ```
 We will parse this line, split it into:
 - CLI name: `opencode`
@@ -47,14 +47,14 @@ If the configuration file is missing, we will halt with a helpful instruction on
 
 ### High-Level Flow
 1. At startup (`build start`), the router reads and parses `~/.build/config.yml`.
-2. Based on the parsed `cli` value, it resolves the executable and instantiates the correct `Client` implementation (initially the `opencode` driver).
+2. Based on the parsed `agent_adapter` value, it resolves the executable and instantiates the correct `Client` implementation (initially the `opencode` driver).
 3. The `Client` is injected into the `Router`.
 4. Wherever the router executed `opencode`, it now calls `cliClient.RunSession(...)` or `cliClient.GetValidModels(...)`.
 
 ## Implementation Backlog
 
 ### Pending
-- `[CONFIG]` Implement `~/.build/config.yml` parser that reads the user's home directory configuration and parses the `cli: <name>:<provider>/<model>` format.
+- `[CONFIG]` Implement `~/.build/config.yml` parser that reads the user's home directory configuration and parses the `agent_adapter: <name>:<provider>/<model>` format.
 - `[INTERFACE]` Define the `cli.Client` interface and the initial `opencode` driver implementing this interface.
 - `[INTEGRATION]` Refactor `cmd/build/main.go` and `internal/router/router.go` to use the new `cli.Client` abstraction instead of hardcoded environment variables and `opencode` exec calls.
 - `[VERIFICATION]` Ensure all existing tests pass and verify the behavior using mock interfaces or a test driver.

@@ -1,0 +1,3 @@
+# Create the `internal/cli` package defining the `Client` interface and implement the initial `opencode` driver that satisfies this interface.
+
+This task focuses on establishing the foundational abstraction for interacting with different LLM CLI tools. You will create a new Go package named `internal/cli`. Within this package, you need to define a `Client` interface that standardizes how the orchestrator communicates with an LLM executable (e.g., methods for sending prompts, streaming output, or handling context). Once the interface is defined, implement the `opencode` driver. This driver will be a struct that satisfies the `Client` interface and encapsulates the specific logic, flags, and execution commands required to interface with the `opencode` CLI tool.
