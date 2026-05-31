@@ -37,6 +37,7 @@ Desktop.ini
 *.test
 *.prof
 *.coverprofile
+__debug_bin
 
 # IDEs, editors and local configs
 .vscode/
