@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"embed"
@@ -16,6 +17,8 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/jefflunt/build/internal/cli"
+	"github.com/jefflunt/build/internal/config"
 	"github.com/jefflunt/build/internal/db"
 	"github.com/jefflunt/build/internal/router"
 	"github.com/jefflunt/build/internal/timecmd"
@@ -235,18 +238,45 @@ func validateLLMConfig(out io.Writer) int {
 }
 
 func getValidModels() []string {
-	cmd := exec.Command("opencode", "models")
-	output, err := cmd.Output()
+	var client cli.Client
+	cfg, err := config.Load()
+	if err == nil && cfg != nil && cfg.CLIName == "opencode" {
+		client = cli.NewOpencodeClient()
+	} else {
+		client = cli.NewOpencodeClient()
+	}
+
+	ctx := context.Background()
+	lines, err := client.Models(ctx)
 	if err != nil {
 		// Fallback
 		return []string{"gemini-3.1-flash-lite-preview", "gemini-3.1-pro", "gpt-4o"}
 	}
-
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 	return lines
 }
 
 func runRouter() {
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	var client cli.Client
+	if cfg.CLIName == "opencode" {
+		client = cli.NewOpencodeClient()
+	} else {
+		fmt.Fprintf(os.Stderr, "Unsupported agent_adapter CLI: %s\n", cfg.CLIName)
+		os.Exit(1)
+	}
+
+	if os.Getenv("BUILD_LLM_PROVIDER") == "" {
+		os.Setenv("BUILD_LLM_PROVIDER", cfg.Provider)
+	}
+	if os.Getenv("BUILD_LLM_MODEL") == "" {
+		os.Setenv("BUILD_LLM_MODEL", cfg.Model)
+	}
+
 	if code := validateLLMConfig(os.Stdout); code != 0 {
 		os.Exit(code)
 	}
@@ -282,7 +312,7 @@ func runRouter() {
 	provider := os.Getenv("BUILD_LLM_PROVIDER")
 	model := os.Getenv("BUILD_LLM_MODEL")
 
-	r := router.NewRouter(database, provider, model, agentInstructions)
+	r := router.NewRouter(database, client, provider, model, agentInstructions)
 	go r.Run()
 
 	<-sigChan

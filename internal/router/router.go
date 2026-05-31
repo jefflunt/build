@@ -13,12 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jefflunt/build/internal/cli"
 	"github.com/jefflunt/build/pkg/version"
 )
 
 // Router represents the persistent background service.
 type Router struct {
 	db               *sql.DB
+	client           cli.Client
 	lastPrintedState string
 	provider         string
 	model            string
@@ -26,8 +28,8 @@ type Router struct {
 }
 
 // NewRouter creates a new router instance.
-func NewRouter(db *sql.DB, provider, model string, templatesFS embed.FS) *Router {
-	return &Router{db: db, provider: provider, model: model, templatesFS: templatesFS}
+func NewRouter(db *sql.DB, client cli.Client, provider, model string, templatesFS embed.FS) *Router {
+	return &Router{db: db, client: client, provider: provider, model: model, templatesFS: templatesFS}
 }
 
 // Run starts the persistent reconciliation loop.
@@ -201,18 +203,14 @@ func (r *Router) processTask(taskID, title, description string, assigneeID int) 
 	os.WriteFile(agentInstructionFile, []byte(fullInstructions), 0644)
 	defer os.Remove(agentInstructionFile)
 
-	// Run autonomous opencode CLI session
-	fmt.Printf("Launching autonomous opencode session for %s with model %s/%s as agent %s...\n", roleFile, r.provider, r.model, agentName)
-	
-	cmd := exec.Command("opencode", "-m", fmt.Sprintf("%s/%s", r.provider, r.model), "--agent", agentName, "run", fullInstructions)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	// Run autonomous session using the CLI client
+	fmt.Printf("Launching autonomous session for %s with model %s/%s as agent %s...\n", roleFile, r.provider, r.model, agentName)
 	
 	startTime := time.Now()
-	runErr := cmd.Run()
+	runErr := r.client.Run(context.Background(), fmt.Sprintf("%s/%s", r.provider, r.model), agentName, fullInstructions, os.Stdout, os.Stderr)
 	duration := int(time.Since(startTime).Seconds())
 	if runErr != nil {
-		fmt.Printf("opencode session ended with error: %v\n", runErr)
+		fmt.Printf("CLI session ended with error: %v\n", runErr)
 	}
 
 	// Run sweep and commit before handoff
@@ -547,10 +545,7 @@ func (r *Router) runSweepAndCommit(taskID, role string) {
 	os.WriteFile(sweepInstructionsFile, agentBytes, 0644)
 	defer os.Remove(sweepInstructionsFile)
 	
-	cmd := exec.Command("opencode", "-m", fmt.Sprintf("%s/%s", r.provider, r.model), "--agent", "build", "run", string(agentBytes))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err = cmd.Run()
+	err = r.client.Run(context.Background(), fmt.Sprintf("%s/%s", r.provider, r.model), "build", string(agentBytes), os.Stdout, os.Stderr)
 	if err != nil {
 		fmt.Printf("Sweep agent ended with error: %v\n", err)
 	}
