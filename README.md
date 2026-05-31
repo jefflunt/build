@@ -15,6 +15,68 @@ The orchestrator manages the lifecycle of each task through a sequence of assign
 - **Boss (ID 4)**: Evaluates the implementation and test results against the original task specifications to approve or reject the work.
 - **Router**: The persistent background process that monitors the task database, triggers agent execution via `opencode` CLI sessions, manages git commits, and executes the test adapter.
 
+### Workflow and Escalation Diagram
+
+```text
+                           +-------------------------+
+                           |  Owner / Operator (1)   | <===================[ Strike 4+ ]
+                           +-------------------------+                          |
+                                      | (build enqueue & start)                 |
+                                      v                                         |
+                           +-------------------------+                          |
+                           |     Router Process      |                          |
+                           +-------------------------+                          |
+                                      |                                         |
+                                      v                                         |
++----------------------------------------------------------------------------+  |
+|  Autonomous Agent Loop                                                     |  |
+|                                                                            |  |
+|       +-----------------------+                                            |  |
+|  +--->|   Developer (ID 2)    | <====================================+     |  |
+|  |    |     (Writes Code)     |                                      |     |  |
+|  |    +-----------------------+                                      |     |  |
+|  |                |                                                  |     |  |
+|  |                v                                                  |     |  |
+|  |    +-----------------------+                                      |     |  |
+|  |    |     Tester (ID 3)     |                                      |     |  |
+|  |    |    (Writes Tests)     |                                      |     |  |
+|  |    +-----------------------+                                      |     |  |
+|  |                |                                                  |     |  |
+|  |                v                                                  |     |  |
+|  |    +-----------------------+                                      |     |  |
+|  |    |    Run Test Suite     |                                      |     |  |
+|  |    +-----------------------+                                      |     |  |
+|  |         |             |                                           |     |  |
+|  |    Pass |             | Fail (Test Failures)                      |     |  |
+|  |         v             v                                           |     |  |
+|  |    +-----------------------+                                      |     |  |
+|  |    |      Boss (ID 4)      |                                      |     |  |
+|  |    |    (Verifies Task)    |                                      |     |  |
+|  |    +-----------------------+                                      |     |  |
+|  |         |             |                                           |     |  |
+|  | Approve |             | Reject (Verification Failures)            |     |  |
+|  |         v             v                                           |     |  |
+|  |     [ Done ]    +-----------+                                     |     |  |
+|  |                 | Failure?  |                                     |     |  |
+|  |                 +-----------+                                     |     |  |
+|  |                       |                                           |     |  |
+|  |                       | Route based on Strike Counter:            |     |  |
+|  |                       |                                           |     |  |
+|  |                       +---> [ Strike 1 or 2 ] --------------------+     |  |
+|  |                       |     (Retry task with Dev)                 |     |  |
+|  |                       |                                           |     |  |
+|  |                       +---> [ Strike 3 ]                          |     |  |
+|  |                       |     Escalate to: Lead Engineer (ID 5)     |     |  |
+|  |                       |     (Adds Guidance comment)               |     |  |
+|  |                       |     and routes back to Developer          |     |  |
+|  |                       |                                           |     |  |
+|  |                       +---> [ Strike 4+ ]                         |     |  |
+|  |                             Escalate to: Owner (ID 1) --------------------+
+|  |                             (State set to 'failed'; awaits redo)        |
+|  |                                                                         |
++----------------------------------------------------------------------------+
+```
+
 ---
 
 ## Practical Workflow: Building a Feature
