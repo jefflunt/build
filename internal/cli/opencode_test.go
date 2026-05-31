@@ -224,3 +224,26 @@ google/gemini-pro
 		})
 	}
 }
+
+func TestOpencodeClient_RealExec(t *testing.T) {
+	t.Run("Run with non-existent binary returns error", func(t *testing.T) {
+		client := NewOpencodeClient()
+		client.BinaryPath = "this-binary-does-not-exist-hopefully-12345"
+		
+		var stdout, stderr bytes.Buffer
+		err := client.Run(context.Background(), "model", "agent", "prompt", &stdout, &stderr)
+		if err == nil {
+			t.Fatal("expected error when running non-existent binary, got nil")
+		}
+	})
+
+	t.Run("Models with non-existent binary returns error", func(t *testing.T) {
+		client := NewOpencodeClient()
+		client.BinaryPath = "this-binary-does-not-exist-hopefully-12345"
+		
+		_, err := client.Models(context.Background())
+		if err == nil {
+			t.Fatal("expected error when querying models from non-existent binary, got nil")
+		}
+	})
+}

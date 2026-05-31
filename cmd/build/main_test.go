@@ -167,3 +167,57 @@ func TestGetValidModelsFallback(t *testing.T) {
 		}
 	}
 }
+
+func TestGetValidModelsWithConfig(t *testing.T) {
+	// Setup custom home directory
+	origHome := os.Getenv("HOME")
+	defer os.Setenv("HOME", origHome)
+
+	tempHome, err := os.MkdirTemp("", "main-test-home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempHome)
+
+	os.Setenv("HOME", tempHome)
+
+	// Create .build folder and config.yml
+	buildDir := filepath.Join(tempHome, ".build")
+	if err := os.MkdirAll(buildDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	configFile := filepath.Join(buildDir, "config.yml")
+	configData := []byte("agent_adapter: opencode:anthropic/claude-3.5-sonnet")
+	if err := os.WriteFile(configFile, configData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a temporary directory for the mock command
+	tempDir, err := os.MkdirTemp("", "mock-opencode-with-config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	mockOpencodePath := filepath.Join(tempDir, "opencode")
+	scriptContent := `#!/usr/bin/env bash
+echo "claude-3.5-sonnet"
+`
+	if err := os.WriteFile(mockOpencodePath, []byte(scriptContent), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Manipulate PATH to use our mock
+	originalPath := os.Getenv("PATH")
+	defer os.Setenv("PATH", originalPath)
+	os.Setenv("PATH", tempDir+string(os.PathListSeparator)+originalPath)
+
+	// Run the function
+	models := getValidModels()
+
+	// Verify the result contains the configured model
+	if len(models) == 0 || models[0] != "claude-3.5-sonnet" {
+		t.Errorf("expected [claude-3.5-sonnet], got %v", models)
+	}
+}

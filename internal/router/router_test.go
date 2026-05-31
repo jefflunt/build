@@ -2,9 +2,11 @@ package router
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -160,5 +162,250 @@ func TestRouter_Reconcile(t *testing.T) {
 	}
 	if agentID != 3 {
 		t.Errorf("expected assignee to transition to 3 (Tester), got %d", agentID)
+	}
+}
+
+func setupRouterTest(t *testing.T) (origDir, tempDir string, database *sql.DB, mockCli *mockClient) {
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tempDir, err = os.MkdirTemp("", "router-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.Chdir(tempDir)
+	if err != nil {
+		os.RemoveAll(tempDir)
+		t.Fatal(err)
+	}
+
+	err = os.MkdirAll(".build", 0755)
+	if err != nil {
+		os.Chdir(origDir)
+		os.RemoveAll(tempDir)
+		t.Fatal(err)
+	}
+
+	os.Setenv("GIT_AUTHOR_NAME", "Tester")
+	os.Setenv("GIT_AUTHOR_EMAIL", "tester@example.com")
+	os.Setenv("GIT_COMMITTER_NAME", "Tester")
+	os.Setenv("GIT_COMMITTER_EMAIL", "tester@example.com")
+
+	database, err = db.InitDB(":memory:")
+	if err != nil {
+		os.Chdir(origDir)
+		os.RemoveAll(tempDir)
+		t.Fatalf("failed to init database: %v", err)
+	}
+
+	_, err = database.Exec(`
+		INSERT INTO agents (id, role, name) VALUES 
+		(1, 'owner', 'Owner'),
+		(2, 'dev', 'Developer'),
+		(3, 'tester', 'Tester'),
+		(4, 'boss', 'Boss'),
+		(5, 'lead', 'Lead Engineer'),
+		(6, 'sweep', 'Git Cleanup Artist')
+	`)
+	if err != nil {
+		database.Close()
+		os.Chdir(origDir)
+		os.RemoveAll(tempDir)
+		t.Fatalf("failed to seed agents: %v", err)
+	}
+
+	mockCli = &mockClient{}
+
+	return origDir, tempDir, database, mockCli
+}
+
+func teardownRouterTest(origDir, tempDir string, database *sql.DB) {
+	if database != nil {
+		database.Close()
+	}
+	os.Chdir(origDir)
+	os.RemoveAll(tempDir)
+	os.Unsetenv("GIT_AUTHOR_NAME")
+	os.Unsetenv("GIT_AUTHOR_EMAIL")
+	os.Unsetenv("GIT_COMMITTER_NAME")
+	os.Unsetenv("GIT_COMMITTER_EMAIL")
+}
+
+func TestRouter_Reconcile_BlockedByFailedTask(t *testing.T) {
+	origDir, tempDir, database, mockCli := setupRouterTest(t)
+	defer teardownRouterTest(origDir, tempDir, database)
+
+	// Seed a failed task
+	_, err := database.Exec(`
+		INSERT INTO tasks (id, parent_id, type, title, description, status, agent_id) VALUES 
+		('T1', NULL, 'task', 'Implement feature X', 'Description of feature X', 'failed', 2)
+	`)
+	if err != nil {
+		t.Fatalf("failed to seed tasks: %v", err)
+	}
+
+	var runCalled bool
+	mockCli.runFunc = func(ctx context.Context, model, agent, prompt string, stdout, stderr io.Writer) error {
+		runCalled = true
+		return nil
+	}
+
+	r := NewRouter(database, mockCli, "google", "gemini-pro", testTemplates)
+	err = r.reconcile()
+	if err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+
+	if runCalled {
+		t.Error("expected mock CLI Run NOT to be called when blocked by failed task")
+	}
+
+	// Verify status remains failed and assignee is still 2
+	var status string
+	var agentID int
+	err = database.QueryRow("SELECT status, agent_id FROM tasks WHERE id = 'T1'").Scan(&status, &agentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" || agentID != 2 {
+		t.Errorf("expected status 'failed' and assignee 2, got %q and %d", status, agentID)
+	}
+}
+
+func TestRouter_Reconcile_StuckTaskEscalatedToLead(t *testing.T) {
+	origDir, tempDir, database, mockCli := setupRouterTest(t)
+	defer teardownRouterTest(origDir, tempDir, database)
+
+	// Seed a stuck task (assignee is Lead 5)
+	_, err := database.Exec(`
+		INSERT INTO tasks (id, parent_id, type, title, description, status, agent_id) VALUES 
+		('T1', NULL, 'task', 'Stuck task', 'Description', 'stuck', 5)
+	`)
+	if err != nil {
+		t.Fatalf("failed to seed tasks: %v", err)
+	}
+
+	var calls []string
+	mockCli.runFunc = func(ctx context.Context, model, agent, prompt string, stdout, stderr io.Writer) error {
+		calls = append(calls, agent)
+		return nil
+	}
+
+	r := NewRouter(database, mockCli, "google", "gemini-pro", testTemplates)
+	err = r.reconcile()
+	if err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+
+	// It should call client.Run for the Lead task, and then for the sweep agent
+	if len(calls) < 2 {
+		t.Fatalf("expected at least 2 run calls, got %d", len(calls))
+	}
+	if calls[0] != "build" {
+		t.Errorf("expected first call to agent 'build', got %q", calls[0])
+	}
+
+	// Under handlePostSession, Lead finished transitions back to Dev (agent_id = 2, status = 'todo')
+	var status string
+	var agentID int
+	err = database.QueryRow("SELECT status, agent_id FROM tasks WHERE id = 'T1'").Scan(&status, &agentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != "todo" || agentID != 2 {
+		t.Errorf("expected task to transition back to 'todo' with assignee 2 (dev) after Lead finished, got status %q and assignee %d", status, agentID)
+	}
+}
+
+func TestRouter_Reconcile_TesterFinished_Success(t *testing.T) {
+	origDir, tempDir, database, mockCli := setupRouterTest(t)
+	defer teardownRouterTest(origDir, tempDir, database)
+
+	// Seed a task with Tester assignee (3)
+	_, err := database.Exec(`
+		INSERT INTO tasks (id, parent_id, type, title, description, status, agent_id) VALUES 
+		('T1', NULL, 'task', 'Test Task', 'Description', 'todo', 3)
+	`)
+	if err != nil {
+		t.Fatalf("failed to seed tasks: %v", err)
+	}
+
+	// Create a successful test script adapter
+	testScript := filepath.Join(".build", "test")
+	if err := os.WriteFile(testScript, []byte("#!/usr/bin/env bash\nexit 0\n"), 0755); err != nil {
+		t.Fatalf("failed to write mock test script: %v", err)
+	}
+
+	mockCli.runFunc = func(ctx context.Context, model, agent, prompt string, stdout, stderr io.Writer) error {
+		return nil
+	}
+
+	r := NewRouter(database, mockCli, "google", "gemini-pro", testTemplates)
+	err = r.reconcile()
+	if err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+
+	// Verify task transitions to assignee 4 (Boss)
+	var agentID int
+	err = database.QueryRow("SELECT agent_id FROM tasks WHERE id = 'T1'").Scan(&agentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if agentID != 4 {
+		t.Errorf("expected assignee to transition to 4 (Boss) on successful tests, got %d", agentID)
+	}
+}
+
+func TestRouter_Reconcile_TesterFinished_Failure(t *testing.T) {
+	origDir, tempDir, database, mockCli := setupRouterTest(t)
+	defer teardownRouterTest(origDir, tempDir, database)
+
+	// Seed a task with Tester assignee (3)
+	_, err := database.Exec(`
+		INSERT INTO tasks (id, parent_id, type, title, description, status, agent_id) VALUES 
+		('T1', NULL, 'task', 'Test Task', 'Description', 'todo', 3)
+	`)
+	if err != nil {
+		t.Fatalf("failed to seed tasks: %v", err)
+	}
+
+	// Create a failing test script adapter
+	testScript := filepath.Join(".build", "test")
+	if err := os.WriteFile(testScript, []byte("#!/usr/bin/env bash\nexit 1\n"), 0755); err != nil {
+		t.Fatalf("failed to write mock test script: %v", err)
+	}
+
+	mockCli.runFunc = func(ctx context.Context, model, agent, prompt string, stdout, stderr io.Writer) error {
+		return nil
+	}
+
+	r := NewRouter(database, mockCli, "google", "gemini-pro", testTemplates)
+	err = r.reconcile()
+	if err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+
+	// Verify task transitions back to assignee 2 (Dev)
+	var agentID int
+	err = database.QueryRow("SELECT agent_id FROM tasks WHERE id = 'T1'").Scan(&agentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if agentID != 2 {
+		t.Errorf("expected assignee to transition back to 2 (Dev) on failing tests, got %d", agentID)
+	}
+
+	// Verify that a comment was added detailing the test failure
+	var commentCount int
+	err = database.QueryRow("SELECT COUNT(*) FROM comments WHERE task_id = 'T1'").Scan(&commentCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if commentCount == 0 {
+		t.Error("expected a comment to be created on task T1 detailing the test failure")
 	}
 }

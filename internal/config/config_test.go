@@ -235,3 +235,78 @@ func TestLoadFromSource(t *testing.T) {
 		}
 	})
 }
+
+func TestFileConfigSource_Load(t *testing.T) {
+	tempFile, err := os.CreateTemp("", "config-file-source-test")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tempFile.Name())
+
+	expectedContent := []byte("agent_adapter: opencode:anthropic/claude-3.5-sonnet")
+	if _, err := tempFile.Write(expectedContent); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	tempFile.Close()
+
+	source := &FileConfigSource{Path: tempFile.Name()}
+	data, err := source.Load()
+	if err != nil {
+		t.Fatalf("unexpected error loading: %v", err)
+	}
+
+	if string(data) != string(expectedContent) {
+		t.Errorf("expected %q, got %q", string(expectedContent), string(data))
+	}
+}
+
+func TestLoad(t *testing.T) {
+	// Keep track of original HOME
+	origHome := os.Getenv("HOME")
+	defer os.Setenv("HOME", origHome)
+
+	tempHome, err := os.MkdirTemp("", "home-test")
+	if err != nil {
+		t.Fatalf("failed to create temp home: %v", err)
+	}
+	defer os.RemoveAll(tempHome)
+
+	os.Setenv("HOME", tempHome)
+
+	// Case 1: Config file does not exist
+	_, err = Load()
+	if err == nil {
+		t.Fatal("expected error when config file does not exist, got nil")
+	}
+
+	// Case 2: Config file exists but is empty/invalid
+	buildDir := filepath.Join(tempHome, ".build")
+	if err := os.MkdirAll(buildDir, 0755); err != nil {
+		t.Fatalf("failed to create .build dir: %v", err)
+	}
+
+	configFile := filepath.Join(buildDir, "config.yml")
+	if err := os.WriteFile(configFile, []byte(""), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	_, err = Load()
+	if err == nil {
+		t.Fatal("expected error when config file is empty, got nil")
+	}
+
+	// Case 3: Config file is valid
+	validConfig := []byte("agent_adapter: opencode:anthropic/claude-3.5-sonnet")
+	if err := os.WriteFile(configFile, validConfig, 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error loading valid config: %v", err)
+	}
+
+	if cfg.CLIName != "opencode" || cfg.Provider != "anthropic" || cfg.Model != "claude-3.5-sonnet" {
+		t.Errorf("unexpected loaded config: %+v", cfg)
+	}
+}
