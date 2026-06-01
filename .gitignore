@@ -1,3 +1,4 @@
+# File system metadata
 **/.DS_Store
 **/._*
 Thumbs.db
@@ -10,23 +11,16 @@ Desktop.ini
 .fseventsd
 .VolumeIcon.icns
 .apdisk
-/data
-/build
-.build/
-/bin
-**/*.log
-**/tmp/
-**/log/
-*.sqlite
-*.db
-*.sqlite3
-*.db-journal
-*.db-shm
-*.db-wal
-*.breakdown_args
-*.pid
 
-# Compiled binaries
+# The .build/ folder and any of its contents
+.build/
+
+# Compiled binaries and executables
+/build
+**/build
+!**/build/
+/bin
+bin/
 *.exe
 *.o
 *.out
@@ -39,6 +33,22 @@ Desktop.ini
 *.coverprofile
 coverage.html
 __debug_bin
+
+# Ephemeral auto-generated files and caches
+**/*.log
+**/tmp/
+**/log/
+*.breakdown_args
+*.pid
+
+# Databases and database dumps
+/data
+*.sqlite
+*.db
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
 
 # IDEs, editors and local configs
 .vscode/
