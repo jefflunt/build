@@ -517,3 +517,70 @@ func TestExecuteRM_DeleteError(t *testing.T) {
 		t.Errorf("Expected 'delete error', got: %v", err)
 	}
 }
+
+type errorReader struct{}
+
+func (e errorReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("read error")
+}
+
+func TestResolveDescendants_CircularDependency(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	// Setup a circular parent-child dependency to ensure we don't loop forever:
+	// root -> child -> root
+	_, err := db.Exec(`INSERT INTO tasks (id, parent_id, status) VALUES 
+		('root', 'child', 'todo'),
+		('child', 'root', 'todo')`)
+	if err != nil {
+		t.Fatalf("Failed to insert: %v", err)
+	}
+
+	s := NewSQLDB(db)
+
+	ids, err := ResolveDescendantsOfID(s, "root")
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	expected := map[string]bool{"root": true, "child": true}
+	if len(ids) != 2 {
+		t.Errorf("Expected 2 IDs, got %v", ids)
+	}
+	for _, id := range ids {
+		if !expected[id] {
+			t.Errorf("Unexpected resolved ID in circular dep check: %s", id)
+		}
+	}
+}
+
+func TestPromptConfirmation_ReaderError(t *testing.T) {
+	var buf bytes.Buffer
+	res, err := PromptConfirmation(errorReader{}, &buf, 5)
+	if err == nil {
+		t.Error("Expected error from prompt confirmation with failing reader, got nil")
+	} else if !strings.Contains(err.Error(), "read error") {
+		t.Errorf("Expected 'read error', got: %v", err)
+	}
+	if res {
+		t.Error("Expected confirmation to be false on error")
+	}
+}
+
+func TestExecuteRM_PromptError(t *testing.T) {
+	mock := &MockDB{
+		TaskExistsFunc: func(id string) (bool, error) {
+			return true, nil
+		},
+	}
+
+	var w bytes.Buffer
+	err := ExecuteRM(mock, errorReader{}, &w, "id:task1")
+	if err == nil {
+		t.Error("Expected error from ExecuteRM, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to read confirmation") {
+		t.Errorf("Expected 'failed to read confirmation' error, got: %v", err)
+	}
+}
