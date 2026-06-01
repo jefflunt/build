@@ -40,6 +40,9 @@ __debug_bin
 **/log/
 *.breakdown_args
 *.pid
+*.tmp
+*.bak
+*~
 
 # Databases and database dumps
 /data
