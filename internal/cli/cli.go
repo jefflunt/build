@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // Client standardizes how the orchestrator communicates with an LLM CLI tool.
@@ -24,4 +25,21 @@ func NewClient(cliName string) (Client, error) {
 	default:
 		return nil, fmt.Errorf("unsupported agent_adapter CLI: %s", cliName)
 	}
+}
+
+// ParseRMArgs parses and validates the arguments for the 'rm' subcommand.
+// It expects the slice of command-line arguments (including the program name and subcommand).
+// It returns the target string and a boolean indicating whether the arguments are valid.
+func ParseRMArgs(args []string) (string, bool) {
+	if len(args) != 3 {
+		return "", false
+	}
+	target := args[2]
+	if !strings.HasPrefix(target, "id:") && !strings.HasPrefix(target, "status:") {
+		return "", false
+	}
+	if target == "id:" || target == "status:" {
+		return "", false
+	}
+	return target, true
 }

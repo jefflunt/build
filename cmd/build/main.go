@@ -175,11 +175,12 @@ func runCLI(args []string) {
 	case "time":
 		printTime()
 	case "rm":
-		if len(args) < 3 {
+		target, valid := cli.ParseRMArgs(args)
+		if !valid {
 			fmt.Println("Usage: build rm <id:<task-id>|status:<status>>")
 			os.Exit(1)
 		}
-		runRM(args[2])
+		runRM(target)
 	default:
 		fmt.Printf("Unknown subcommand: %s\n", args[1])
 		os.Exit(1)
