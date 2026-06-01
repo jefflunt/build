@@ -3,9 +3,12 @@ package main
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jefflunt/build/internal/db"
 )
 
 
@@ -221,3 +224,67 @@ echo "claude-3.5-sonnet"
 		t.Errorf("expected [claude-3.5-sonnet], got %v", models)
 	}
 }
+
+func TestRunCLI_RM_InvalidSyntax(t *testing.T) {
+	if os.Getenv("BE_CRASHER_RM_INVALID") == "1" {
+		runCLI([]string{"build", "rm"})
+		return
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=TestRunCLI_RM_InvalidSyntax")
+	cmd.Env = append(os.Environ(), "BE_CRASHER_RM_INVALID=1")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err == nil {
+		t.Fatal("expected exit status 1 for invalid rm syntax, got 0")
+	}
+	out := stdout.String() + stderr.String()
+	if !strings.Contains(out, "Usage: build rm <id:<task-id>|status:<status>>") {
+		t.Errorf("expected usage message, got: %q", out)
+	}
+}
+
+func TestRunCLI_RM_NoMatches(t *testing.T) {
+	// Setup a temporary directory to run the test in so we have a clean/isolated environment
+	tempDir, err := os.MkdirTemp("", "main-rm-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create .build directory and initialize an empty database
+	buildDir := filepath.Join(tempDir, ".build")
+	if err := os.MkdirAll(buildDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	dbPath := filepath.Join(buildDir, "build.db")
+	database, err := db.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to init DB: %v", err)
+	}
+	database.Close()
+
+	if os.Getenv("BE_CRASHER_RM_VALID") == "1" {
+		runCLI([]string{"build", "rm", "status:nonexistent"})
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestRunCLI_RM_NoMatches")
+	cmd.Dir = tempDir
+	cmd.Env = append(os.Environ(), "BE_CRASHER_RM_VALID=1")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	if err != nil {
+		t.Fatalf("expected successful execution, got error: %v, stderr: %s", err, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "No tasks found matching the criteria.") {
+		t.Errorf("expected 'No tasks found' message, got: %q", out)
+	}
+}
+
