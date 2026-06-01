@@ -23,15 +23,15 @@
 ## Implementation Backlog
 
 ### Pending
+
+### Current
+
+### Completed
 - `[CLI]` Route the `rm` subcommand in `cmd/build/main.go` and add its usage instruction to `build help`.
 - `[LOGIC]` Implement task resolution and recursive descendant fetching logic for both `id:<task-id>` and `status:<status>` targets.
 - `[DB]` Implement clean deletion queries that purge the resolved task IDs from `tasks`, `comments`, and `audit_logs` tables.
 - `[CLI]` Implement confirmation prompting logic using `bufio.Scanner` to securely read `y`/`Y` from stdin.
 - `[TEST-UNIT]` Write unit tests verifying that recursive cascading, count logic, and actual deletion purge the correct records while leaving other tasks intact.
-
-### Current
-
-### Completed
 
 ## Architecture Overview
 

@@ -23,6 +23,8 @@ This document defines the core entities and architectural concepts for the `buil
     - `build comment <task-id> "<comment>"`: Append a comment to a task.
     - `build approve <task-id>`: Manually mark a task as `done`.
     - `build redo <task-id>`: Reset a `failed` task for the Dev.
+    - `build time`: Display an indented tree view of completed tasks with their direct and rolled-up execution times.
+    - `build rm <id:<task-id>|status:<status>>`: Safely delete a task (or group of tasks by status) recursively along with descendants, comments, and audit logs.
 
 ## 4. Hierarchy
 - **Task**: Single, recursive entity representing any unit of work. Leaf nodes (tasks without children) are the ones that are actively worked on by the agents.
