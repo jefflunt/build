@@ -1,0 +1,41 @@
+#!/bin/bash
+#
+# script/release
+#
+# Prepares and triggers a new release.
+# This script compiles, runs tests locally, commits changes, and pushes a build-number tag (b<count>).
+#
+# Connection:
+# Pushing the tag (e.g. b25) triggers the GitHub Action (.github/workflows/release.yml)
+# which cross-compiles binaries for all major platforms (Linux, macOS, Windows) and publishes
+# a release on GitHub under that tag.
+#
+
+set -e
+
+# Ensure we're in the root of the project
+cd "$(dirname "$0")/.."
+
+echo "==> Running script/build-test-install..."
+./script/build-test-install
+
+# Check for uncommitted changes
+if [ -n "$(git status --porcelain)" ]; then
+    echo "==> Committing uncommitted changes..."
+    git add .
+    git commit -m "chore: auto-commit before release"
+fi
+
+echo "==> Getting commit count..."
+# Get number of commits, removing whitespace
+NUM=$(git log --oneline | wc -l | tr -d '[:space:]')
+TAG="b$NUM"
+
+echo "==> Tagging as $TAG..."
+git tag "$TAG"
+
+echo "==> Pushing..."
+git push
+git push --tags
+
+echo "==> Release completed!"
