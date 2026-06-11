@@ -17,8 +17,6 @@ type Client interface {
 // NewClient creates a new Client implementation for the given CLI name.
 func NewClient(cliName string) (Client, error) {
 	switch cliName {
-	case "opencode":
-		return NewOpencodeClient(), nil
 	case "agent":
 		return NewAgentClient(), nil
 	default:

@@ -31,15 +31,15 @@ func TestStripCommentsAndQuotes(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"no quotes no comments", "opencode:anthropic/claude-3.5-sonnet", "opencode:anthropic/claude-3.5-sonnet"},
-		{"double quotes", "\"opencode:anthropic/claude-3.5-sonnet\"", "opencode:anthropic/claude-3.5-sonnet"},
-		{"single quotes", "'opencode:anthropic/claude-3.5-sonnet'", "opencode:anthropic/claude-3.5-sonnet"},
-		{"trailing comment", "opencode:anthropic/claude-3.5-sonnet # comment here", "opencode:anthropic/claude-3.5-sonnet"},
-		{"double quotes with trailing comment", "\"opencode:anthropic/claude-3.5-sonnet\" # comment here", "opencode:anthropic/claude-3.5-sonnet"},
-		{"single quotes with trailing comment", "'opencode:anthropic/claude-3.5-sonnet' # comment here", "opencode:anthropic/claude-3.5-sonnet"},
-		{"unmatched double quote prefix", "\"opencode:anthropic/claude-3.5-sonnet", "\"opencode:anthropic/claude-3.5-sonnet"},
-		{"unmatched single quote prefix", "'opencode:anthropic/claude-3.5-sonnet", "'opencode:anthropic/claude-3.5-sonnet"},
-		{"with inner comments inside quotes", "\"opencode:anthropic/claude-3.5-sonnet #notacomment\"", "opencode:anthropic/claude-3.5-sonnet #notacomment"},
+		{"no quotes no comments", "agent:test_opencode", "agent:test_opencode"},
+		{"double quotes", "\"agent:test_opencode\"", "agent:test_opencode"},
+		{"single quotes", "'agent:test_opencode'", "agent:test_opencode"},
+		{"trailing comment", "agent:test_opencode # comment here", "agent:test_opencode"},
+		{"double quotes with trailing comment", "\"agent:test_opencode\" # comment here", "agent:test_opencode"},
+		{"single quotes with trailing comment", "'agent:test_opencode' # comment here", "agent:test_opencode"},
+		{"unmatched double quote prefix", "\"agent:test_opencode", "\"agent:test_opencode"},
+		{"unmatched single quote prefix", "'agent:test_opencode", "'agent:test_opencode"},
+		{"with inner comments inside quotes", "\"agent:test_opencode #notacomment\"", "agent:test_opencode #notacomment"},
 	}
 
 	for _, tt := range tests {
@@ -59,16 +59,6 @@ func TestParseAdapter(t *testing.T) {
 		expected      *Config
 		expectedError string
 	}{
-		{
-			name:    "valid",
-			adapter: "opencode:anthropic/claude-3.5-sonnet",
-			expected: &Config{
-				AgentAdapter: "opencode:anthropic/claude-3.5-sonnet",
-				CLIName:      "opencode",
-				Provider:     "anthropic",
-				Model:        "claude-3.5-sonnet",
-			},
-		},
 		{
 			name:    "valid agent adapter with space",
 			adapter: "agent: test_opencode",
@@ -91,39 +81,18 @@ func TestParseAdapter(t *testing.T) {
 		},
 		{
 			name:          "missing colon",
-			adapter:       "opencode-anthropic/claude-3.5-sonnet",
+			adapter:       "agent-test_opencode",
 			expectedError: "invalid agent_adapter format",
 		},
 		{
-			name:          "empty CLI name",
-			adapter:       ":anthropic/claude-3.5-sonnet",
-			expectedError: "CLI name cannot be empty",
+			name:          "unsupported CLI name",
+			adapter:       "opencode:test_opencode",
+			expectedError: "only 'agent' is supported",
 		},
 		{
-			name:          "missing slash",
-			adapter:       "opencode:anthropic-claude-3.5-sonnet",
-			expectedError: "expected format 'provider/model' after CLI name",
-		},
-		{
-			name:          "empty provider",
-			adapter:       "opencode:/claude-3.5-sonnet",
-			expectedError: "provider cannot be empty",
-		},
-		{
-			name:          "empty model",
-			adapter:       "opencode:anthropic/",
-			expectedError: "model cannot be empty",
-		},
-		{
-			name:    "with spacing",
-			adapter: " opencode : anthropic / claude-3.5-sonnet ",
-			// ParseAdapter handles spaces by trimming parts
-			expected: &Config{
-				AgentAdapter: " opencode : anthropic / claude-3.5-sonnet ",
-				CLIName:      "opencode",
-				Provider:     "anthropic",
-				Model:        "claude-3.5-sonnet",
-			},
+			name:          "empty adapter name",
+			adapter:       "agent:",
+			expectedError: "adapter name cannot be empty",
 		},
 	}
 
@@ -161,25 +130,25 @@ func TestParse(t *testing.T) {
 	}{
 		{
 			name: "valid minimal",
-			yaml: "agent_adapter: opencode:anthropic/claude-3.5-sonnet",
+			yaml: "agent_adapter: agent:test_opencode",
 			expected: &Config{
-				AgentAdapter: "opencode:anthropic/claude-3.5-sonnet",
-				CLIName:      "opencode",
-				Provider:     "anthropic",
-				Model:        "claude-3.5-sonnet",
+				AgentAdapter: "agent:test_opencode",
+				CLIName:      "agent",
+				Provider:     "test_opencode",
+				Model:        "",
 			},
 		},
 		{
 			name: "valid with comments and quotes",
 			yaml: `
 # This is a comment
-agent_adapter: "opencode:anthropic/claude-3.5-sonnet" # use this adapter
+agent_adapter: "agent:test_opencode" # use this adapter
 `,
 			expected: &Config{
-				AgentAdapter: "opencode:anthropic/claude-3.5-sonnet",
-				CLIName:      "opencode",
-				Provider:     "anthropic",
-				Model:        "claude-3.5-sonnet",
+				AgentAdapter: "agent:test_opencode",
+				CLIName:      "agent",
+				Provider:     "test_opencode",
+				Model:        "",
 			},
 		},
 		{
@@ -231,13 +200,13 @@ func (m *mockConfigSource) Load() ([]byte, error) {
 func TestLoadFromSource(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		mock := &mockConfigSource{
-			data: []byte("agent_adapter: opencode:anthropic/claude-3.5-sonnet"),
+			data: []byte("agent_adapter: agent:test_opencode"),
 		}
 		got, err := LoadFromSource(mock)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got.CLIName != "opencode" || got.Provider != "anthropic" || got.Model != "claude-3.5-sonnet" {
+		if got.CLIName != "agent" || got.Provider != "test_opencode" || got.Model != "" {
 			t.Errorf("unexpected parsed config: %+v", got)
 		}
 	})
@@ -263,7 +232,7 @@ func TestFileConfigSource_Load(t *testing.T) {
 	}
 	defer os.Remove(tempFile.Name())
 
-	expectedContent := []byte("agent_adapter: opencode:anthropic/claude-3.5-sonnet")
+	expectedContent := []byte("agent_adapter: agent:test_opencode")
 	if _, err := tempFile.Write(expectedContent); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
@@ -316,7 +285,7 @@ func TestLoad(t *testing.T) {
 	}
 
 	// Case 3: Config file is valid
-	validConfig := []byte("agent_adapter: opencode:anthropic/claude-3.5-sonnet")
+	validConfig := []byte("agent_adapter: agent:test_opencode")
 	if err := os.WriteFile(configFile, validConfig, 0644); err != nil {
 		t.Fatalf("failed to write config file: %v", err)
 	}
@@ -326,7 +295,7 @@ func TestLoad(t *testing.T) {
 		t.Fatalf("unexpected error loading valid config: %v", err)
 	}
 
-	if cfg.CLIName != "opencode" || cfg.Provider != "anthropic" || cfg.Model != "claude-3.5-sonnet" {
+	if cfg.CLIName != "agent" || cfg.Provider != "test_opencode" || cfg.Model != "" {
 		t.Errorf("unexpected loaded config: %+v", cfg)
 	}
 }

@@ -87,52 +87,29 @@ func ParseBytes(data []byte) (*Config, error) {
 	return Parse(strings.NewReader(string(data)))
 }
 
-// ParseAdapter splits a raw agent adapter string into CLI Name, Provider, and Model components.
+// ParseAdapter splits a raw agent adapter string into CLI Name and Adapter Name components.
 func ParseAdapter(adapter string) (*Config, error) {
-	// Expected format: <cli>:<provider>/<model> (e.g., "opencode:anthropic/claude-3.5-sonnet")
+	// Expected format: agent:<adapter-name> (e.g., "agent:test_opencode")
 	parts := strings.SplitN(adapter, ":", 2)
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid agent_adapter format %q: expected format 'cli:provider/model'", adapter)
+		return nil, fmt.Errorf("invalid agent_adapter format %q: expected format 'agent:adapter_name'", adapter)
 	}
 
 	cliName := strings.TrimSpace(parts[0])
-	if cliName == "" {
-		return nil, fmt.Errorf("invalid agent_adapter format %q: CLI name cannot be empty", adapter)
+	if cliName != "agent" {
+		return nil, fmt.Errorf("unsupported CLI %q: only 'agent' is supported", cliName)
 	}
 
 	remaining := strings.TrimSpace(parts[1])
-	if cliName == "agent" {
-		if remaining == "" {
-			return nil, fmt.Errorf("invalid agent_adapter format %q: adapter name cannot be empty", adapter)
-		}
-		return &Config{
-			AgentAdapter: adapter,
-			CLIName:      cliName,
-			Provider:     remaining,
-			Model:        "",
-		}, nil
-	}
-
-	subParts := strings.SplitN(remaining, "/", 2)
-	if len(subParts) != 2 {
-		return nil, fmt.Errorf("invalid agent_adapter format %q: expected format 'provider/model' after CLI name", adapter)
-	}
-
-	provider := strings.TrimSpace(subParts[0])
-	if provider == "" {
-		return nil, fmt.Errorf("invalid agent_adapter format %q: provider cannot be empty", adapter)
-	}
-
-	model := strings.TrimSpace(subParts[1])
-	if model == "" {
-		return nil, fmt.Errorf("invalid agent_adapter format %q: model cannot be empty", adapter)
+	if remaining == "" {
+		return nil, fmt.Errorf("invalid agent_adapter format %q: adapter name cannot be empty", adapter)
 	}
 
 	return &Config{
 		AgentAdapter: adapter,
-		CLIName:      cliName,
-		Provider:     provider,
-		Model:        model,
+		CLIName:      "agent",
+		Provider:     remaining,
+		Model:        "",
 	}, nil
 }
 
