@@ -20,7 +20,7 @@ func TestNewOpencodeClient(t *testing.T) {
 }
 
 func TestNewClient(t *testing.T) {
-	t.Run("supported cliName", func(t *testing.T) {
+	t.Run("supported opencode cliName", func(t *testing.T) {
 		client, err := NewClient("opencode")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -34,6 +34,23 @@ func TestNewClient(t *testing.T) {
 		}
 		if opClient.BinaryPath != "opencode" {
 			t.Errorf("expected BinaryPath 'opencode', got %q", opClient.BinaryPath)
+		}
+	})
+
+	t.Run("supported agent cliName", func(t *testing.T) {
+		client, err := NewClient("agent")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client == nil {
+			t.Fatal("expected non-nil client")
+		}
+		agClient, ok := client.(*AgentClient)
+		if !ok {
+			t.Fatal("expected AgentClient type")
+		}
+		if agClient.BinaryPath != "agent" {
+			t.Errorf("expected BinaryPath 'agent', got %q", agClient.BinaryPath)
 		}
 	})
 

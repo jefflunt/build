@@ -48,14 +48,14 @@ The system architecture shifts to delegate all LLM execution directly to the `ag
 ## Implementation Backlog
 
 ### Pending
-- [ ] Task 1: Update `internal/config/config.go` and `internal/config/config_test.go` to support `agent` adapter format and remove environment variables.
-- [ ] Task 2: Implement `AgentClient` in `internal/cli/agent.go`, update `internal/cli/cli.go` and associated test files.
-- [ ] Task 3: Simplify `cmd/build/main.go` and `cmd/build/main_test.go` to remove environment variable checking and model-listing functions.
-- [ ] Task 4: Refactor `internal/router/router.go` and `internal/router/router_test.go` to remove reliance on LLM provider/model and verify all tests pass.
 
 ### Current
 
 ### Completed
+- [x] Task 1: Update `internal/config/config.go` and `internal/config/config_test.go` to support `agent` adapter format and remove environment variables.
+- [x] Task 2: Implement `AgentClient` in `internal/cli/agent.go`, update `internal/cli/cli.go` and associated test files.
+- [x] Task 3: Simplify `cmd/build/main.go` and `cmd/build/main_test.go` to remove environment variable checking and model-listing functions.
+- [x] Task 4: Refactor `internal/router/router.go` and `internal/router/router_test.go` to remove reliance on LLM provider/model and verify all tests pass.
 
 ## Checklist & TDD Requirements
 - **TDD Requirement**: Write failing unit tests first (RED), implement the minimal changes to make them pass (GREEN), and confirm.

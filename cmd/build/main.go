@@ -2,14 +2,12 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"crypto/rand"
 	"database/sql"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -210,63 +208,6 @@ func seedDB() {
 	}
 }
 
-func validateLLMConfig(out io.Writer) int {
-	provider := os.Getenv("BUILD_LLM_PROVIDER")
-	model := os.Getenv("BUILD_LLM_MODEL")
-
-	if provider != "" && model != "" {
-		return 0
-	}
-
-	fmt.Fprintln(out, "Error: BUILD_LLM_PROVIDER and BUILD_LLM_MODEL environment variables must be set.")
-	if provider == "" {
-		fmt.Fprintf(out, "  - BUILD_LLM_PROVIDER is missing.\n")
-	}
-	if model == "" {
-		fmt.Fprintf(out, "  - BUILD_LLM_MODEL is missing.\n")
-	}
-	fmt.Fprintln(out)
-
-	// Attempt to get valid models
-	models := getValidModels()
-
-	fmt.Fprintln(out, "Suggested models:")
-	for _, m := range models {
-		fmt.Fprintf(out, "  %s\n", m)
-	}
-	fmt.Fprintln(out)
-
-	fmt.Fprintln(out, "Setup Guide:")
-	fmt.Fprintln(out, "  export BUILD_LLM_PROVIDER=<provider>")
-	fmt.Fprintln(out, "  export BUILD_LLM_MODEL=<model>")
-	fmt.Fprintln(out, "  # Example:")
-	fmt.Fprintln(out, "  export BUILD_LLM_PROVIDER=google")
-	fmt.Fprintln(out, "  export BUILD_LLM_MODEL=gemini-3.1-flash-lite-preview")
-	fmt.Fprintln(out)
-	return 1
-}
-
-func getValidModels() []string {
-	var client cli.Client
-	cfg, err := config.Load()
-	if err == nil && cfg != nil {
-		if c, err := cli.NewClient(cfg.CLIName); err == nil {
-			client = c
-		}
-	}
-	if client == nil {
-		client = cli.NewOpencodeClient()
-	}
-
-	ctx := context.Background()
-	lines, err := client.Models(ctx)
-	if err != nil {
-		// Fallback
-		return []string{"gemini-3.1-flash-lite-preview", "gemini-3.1-pro", "gpt-4o"}
-	}
-	return lines
-}
-
 func runRouter() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -280,16 +221,6 @@ func runRouter() {
 		os.Exit(1)
 	}
 
-	if os.Getenv("BUILD_LLM_PROVIDER") == "" {
-		os.Setenv("BUILD_LLM_PROVIDER", cfg.Provider)
-	}
-	if os.Getenv("BUILD_LLM_MODEL") == "" {
-		os.Setenv("BUILD_LLM_MODEL", cfg.Model)
-	}
-
-	if code := validateLLMConfig(os.Stdout); code != 0 {
-		os.Exit(code)
-	}
 	// Check if initialized
 	if _, err := os.Stat(".build"); os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "Error: Project not initialized. Run 'build init' first.\n")
@@ -319,10 +250,7 @@ func runRouter() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	// Start Router
-	provider := os.Getenv("BUILD_LLM_PROVIDER")
-	model := os.Getenv("BUILD_LLM_MODEL")
-
-	r := router.NewRouter(database, client, provider, model, agentInstructions)
+	r := router.NewRouter(database, client, cfg.Provider, cfg.Model, agentInstructions)
 	go r.Run()
 
 	<-sigChan

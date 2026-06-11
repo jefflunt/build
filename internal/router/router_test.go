@@ -19,7 +19,6 @@ var testTemplates embed.FS
 // mockClient implements cli.Client interface for testing
 type mockClient struct {
 	runFunc    func(ctx context.Context, model, agent, prompt string, stdout, stderr io.Writer) error
-	modelsFunc func(ctx context.Context) ([]string, error)
 }
 
 func (m *mockClient) Run(ctx context.Context, model, agent, prompt string, stdout, stderr io.Writer) error {
@@ -27,13 +26,6 @@ func (m *mockClient) Run(ctx context.Context, model, agent, prompt string, stdou
 		return m.runFunc(ctx, model, agent, prompt, stdout, stderr)
 	}
 	return nil
-}
-
-func (m *mockClient) Models(ctx context.Context) ([]string, error) {
-	if m.modelsFunc != nil {
-		return m.modelsFunc(ctx)
-	}
-	return nil, nil
 }
 
 func TestRouter_Reconcile(t *testing.T) {

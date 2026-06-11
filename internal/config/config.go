@@ -101,6 +101,18 @@ func ParseAdapter(adapter string) (*Config, error) {
 	}
 
 	remaining := strings.TrimSpace(parts[1])
+	if cliName == "agent" {
+		if remaining == "" {
+			return nil, fmt.Errorf("invalid agent_adapter format %q: adapter name cannot be empty", adapter)
+		}
+		return &Config{
+			AgentAdapter: adapter,
+			CLIName:      cliName,
+			Provider:     remaining,
+			Model:        "",
+		}, nil
+	}
+
 	subParts := strings.SplitN(remaining, "/", 2)
 	if len(subParts) != 2 {
 		return nil, fmt.Errorf("invalid agent_adapter format %q: expected format 'provider/model' after CLI name", adapter)

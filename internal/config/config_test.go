@@ -70,6 +70,26 @@ func TestParseAdapter(t *testing.T) {
 			},
 		},
 		{
+			name:    "valid agent adapter with space",
+			adapter: "agent: test_opencode",
+			expected: &Config{
+				AgentAdapter: "agent: test_opencode",
+				CLIName:      "agent",
+				Provider:     "test_opencode",
+				Model:        "",
+			},
+		},
+		{
+			name:    "valid agent adapter no space",
+			adapter: "agent:test_opencode",
+			expected: &Config{
+				AgentAdapter: "agent:test_opencode",
+				CLIName:      "agent",
+				Provider:     "test_opencode",
+				Model:        "",
+			},
+		},
+		{
 			name:          "missing colon",
 			adapter:       "opencode-anthropic/claude-3.5-sonnet",
 			expectedError: "invalid agent_adapter format",
