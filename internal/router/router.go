@@ -464,21 +464,20 @@ build review ` + taskID + ` approve "The code looks good and tests pass."`
 }
 
 func (r *Router) printTree(activeID string, activeAssignee int, failedID string) {
-	query := `
-	WITH RECURSIVE task_tree AS (
-		SELECT id, parent_id, title, type, status, 0 AS depth, CAST(rowid AS TEXT) AS sort_path, rowid
-		FROM tasks
-		WHERE parent_id = '' OR parent_id IS NULL
-		UNION ALL
-		SELECT t.id, t.parent_id, t.title, t.type, t.status, tt.depth + 1, tt.sort_path || '/' || substr('0000000000' || t.rowid, -10, 10), t.rowid
-		FROM tasks t
-		JOIN task_tree tt ON t.parent_id = tt.id
-	)
-	SELECT id, title, status, depth
-	FROM task_tree
-	ORDER BY sort_path ASC;
-	`
-	rows, err := r.db.Query(query)
+	rows, err := r.db.Query(`
+		WITH RECURSIVE task_tree AS (
+			SELECT id, parent_id, title, type, status, 0 AS depth, CAST(rowid AS TEXT) AS sort_path
+			FROM tasks
+			WHERE parent_id = '' OR parent_id IS NULL
+			UNION ALL
+			SELECT t.id, t.parent_id, t.title, t.type, t.status, tt.depth + 1, tt.sort_path || '/' || substr('0000000000' || t.rowid, -10, 10)
+			FROM tasks t
+			JOIN task_tree tt ON t.parent_id = tt.id
+		)
+		SELECT id, title, status, depth
+		FROM task_tree
+		ORDER BY sort_path ASC
+	`)
 	if err != nil {
 		fmt.Printf("Error querying tree: %v\n", err)
 		return
@@ -490,6 +489,7 @@ func (r *Router) printTree(activeID string, activeAssignee int, failedID string)
 		var id, title, status string
 		var depth int
 		if err := rows.Scan(&id, &title, &status, &depth); err != nil {
+			fmt.Printf("Scan error in printTree: %v\n", err)
 			continue
 		}
 
