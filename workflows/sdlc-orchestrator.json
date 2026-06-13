@@ -1,16 +1,91 @@
 [
     {
-        "id": "build-orchestrator-tab",
-        "type": "tab",
-        "label": "Build SDLC Orchestrator",
         "disabled": false,
-        "info": "This flow visually ports the Go-based build router. It polls every 5 seconds, implements strict serialization (locking), executes agents via CLI, runs workspace tests, and performs git sweeps."
+        "id": "build-orchestrator-tab",
+        "info": "This flow visually ports the Go-based build router. It polls every 5 seconds, implements strict serialization (locking), executes agents via CLI, runs workspace tests, and performs git sweeps.",
+        "label": "Build SDLC Orchestrator",
+        "type": "tab"
     },
     {
+        "h": 97,
+        "id": "bef2c4cc24966901",
+        "nodes": [
+            "inject-poll",
+            "check-lock",
+            "get-config",
+            "parse-config"
+        ],
+        "style": {
+            "color": "#f0f0f0",
+            "fill": "rgba(255, 255, 255, 0.03)",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "stroke": "#555555",
+            "stroke-opacity": "1"
+        },
+        "type": "group",
+        "w": 822,
+        "x": 14,
+        "y": 31.5,
+        "z": "build-orchestrator-tab"
+    },
+    {
+        "h": 97,
+        "id": "41c9cc03de72b45f",
+        "nodes": [
+            "eval-stuck",
+            "check-stuck-tasks",
+            "eval-blocked",
+            "check-blocked-tasks"
+        ],
+        "style": {
+            "color": "#f0f0f0",
+            "fill": "rgba(255, 255, 255, 0.03)",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "stroke": "#555555",
+            "stroke-opacity": "1"
+        },
+        "type": "group",
+        "w": 902,
+        "x": 604,
+        "y": 151.5,
+        "z": "build-orchestrator-tab"
+    },
+    {
+        "h": 97,
+        "id": "bd8b1d0d14690530",
+        "nodes": [
+            "get-next-todo",
+            "eval-todo",
+            "init-task-assignment"
+        ],
+        "style": {
+            "color": "#f0f0f0",
+            "fill": "rgba(255, 255, 255, 0.03)",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "stroke": "#555555",
+            "stroke-opacity": "1"
+        },
+        "type": "group",
+        "w": 672,
+        "x": 1194,
+        "y": 311.5,
+        "z": "build-orchestrator-tab"
+    },
+    {
+        "crontab": "",
+        "g": "bef2c4cc24966901",
         "id": "inject-poll",
-        "type": "inject",
-        "z": "build-orchestrator-tab",
         "name": "Poll Task DB",
+        "once": true,
+        "onceDelay": 0.1,
+        "payload": "",
+        "payloadType": "date",
         "props": [
             {
                 "p": "payload"
@@ -21,153 +96,154 @@
             }
         ],
         "repeat": "5",
-        "crontab": "",
-        "once": true,
-        "onceDelay": 0.1,
         "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 130,
-        "y": 120,
+        "type": "inject",
         "wires": [
             [
                 "check-lock"
             ]
-        ]
+        ],
+        "x": 140,
+        "y": 80,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "check-lock",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Check & Set Lock",
-        "func": "if (flow.get('is_processing') === true) {\n    node.status({ fill: 'yellow', shape: 'ring', text: 'Locked (already processing)' });\n    return null;\n}\n\nflow.set('is_processing', true);\nnode.status({ fill: 'blue', shape: 'dot', text: 'Lock acquired' });\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "if (flow.get('is_processing') === true) {\n    node.status({ fill: 'yellow', shape: 'ring', text: 'Locked (already processing)' });\n    return null;\n}\n\nflow.set('is_processing', true);\nnode.status({ fill: 'blue', shape: 'dot', text: 'Lock acquired' });\nreturn msg;",
+        "g": "bef2c4cc24966901",
+        "id": "check-lock",
+        "initialize": "",
         "libs": [],
-        "x": 330,
-        "y": 120,
+        "name": "Check \u0026 Set Lock",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "get-config"
             ]
-        ]
+        ],
+        "x": 340,
+        "y": 80,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "get-config",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "cat ~/.build/config.yml",
         "addpay": false,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "cat ~/.build/config.yml",
+        "g": "bef2c4cc24966901",
+        "id": "get-config",
         "name": "Read Config",
-        "x": 530,
-        "y": 120,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "parse-config"
             ],
             [],
             []
-        ]
+        ],
+        "x": 540,
+        "y": 80,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "parse-config",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Parse Config",
-        "func": "var content = msg.payload || '';\nvar lines = content.split('\\n');\nvar adapter = 'live_opencode';\nvar nodeRedUrl = 'http://localhost:1880';\n\nfor (var i = 0; i < lines.length; i++) {\n    var line = lines[i].trim();\n    if (line === '' || line.indexOf('#') === 0) continue;\n    var parts = line.split(':');\n    if (parts.length >= 2) {\n        var key = parts[0].trim();\n        var val = parts.slice(1).join(':').trim();\n        // Strip quotes\n        if ((val.indexOf('\"') === 0 && val.lastIndexOf('\"') === val.length - 1) ||\n            (val.indexOf(\"'\") === 0 && val.lastIndexOf(\"'\") === val.length - 1)) {\n            val = val.substring(1, val.length - 1);\n        }\n        if (key === 'agent_adapter') {\n            var adapterParts = val.split(':');\n            adapter = adapterParts.length > 1 ? adapterParts[1].trim() : val;\n        } else if (key === 'node_red_url') {\n            nodeRedUrl = val;\n        }\n    }\n}\n\nmsg.adapter = adapter;\nmsg.nodeRedUrl = nodeRedUrl;\nnode.status({ fill: 'green', shape: 'dot', text: 'Adapter: ' + adapter });\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var content = msg.payload || '';\nvar lines = content.split('\\n');\nvar adapter = 'live_opencode';\nvar nodeRedUrl = 'http://localhost:1880';\n\nfor (var i = 0; i \u003c lines.length; i++) {\n    var line = lines[i].trim();\n    if (line === '' || line.indexOf('#') === 0) continue;\n    var parts = line.split(':');\n    if (parts.length \u003e= 2) {\n        var key = parts[0].trim();\n        var val = parts.slice(1).join(':').trim();\n        // Strip quotes\n        if ((val.indexOf('\"') === 0 \u0026\u0026 val.lastIndexOf('\"') === val.length - 1) ||\n            (val.indexOf(\"'\") === 0 \u0026\u0026 val.lastIndexOf(\"'\") === val.length - 1)) {\n            val = val.substring(1, val.length - 1);\n        }\n        if (key === 'agent_adapter') {\n            var adapterParts = val.split(':');\n            adapter = adapterParts.length \u003e 1 ? adapterParts[1].trim() : val;\n        } else if (key === 'node_red_url') {\n            nodeRedUrl = val;\n        }\n    }\n}\n\nmsg.adapter = adapter;\nmsg.nodeRedUrl = nodeRedUrl;\nnode.status({ fill: 'green', shape: 'dot', text: 'Adapter: ' + adapter });\nreturn msg;",
+        "g": "bef2c4cc24966901",
+        "id": "parse-config",
+        "initialize": "",
         "libs": [],
-        "x": 730,
-        "y": 120,
+        "name": "Parse Config",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "check-blocked-tasks"
             ]
-        ]
+        ],
+        "x": 740,
+        "y": 80,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "check-blocked-tasks",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "sqlite3 -json .build/build.db \"SELECT id, status FROM tasks WHERE status = 'failed' LIMIT 1\"",
         "addpay": false,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "sqlite3 -json .build/build.db \"SELECT id, status FROM tasks WHERE status = 'failed' LIMIT 1\"",
+        "g": "41c9cc03de72b45f",
+        "id": "check-blocked-tasks",
         "name": "Check Blocked Tasks",
-        "x": 200,
-        "y": 220,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "eval-blocked"
             ],
             [],
             []
-        ]
+        ],
+        "x": 730,
+        "y": 200,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "eval-blocked",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Evaluate Blocked",
-        "func": "var stdout = (msg.payload || '').trim();\nif (stdout !== '') {\n    try {\n        var failedTasks = JSON.parse(stdout);\n        if (failedTasks && failedTasks.length > 0) {\n            node.warn('Router blocked by failed task: ' + failedTasks[0].id + '. Waiting for Owner intervention...');\n            node.status({ fill: 'red', shape: 'dot', text: 'Blocked by failed task: ' + failedTasks[0].id });\n            flow.set('is_processing', false);\n            return null;\n        }\n    } catch (e) {\n        node.error('Error parsing failed tasks: ' + e.message);\n    }\n}\nnode.status({ fill: 'green', shape: 'ring', text: 'No blocked tasks' });\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var stdout = (msg.payload || '').trim();\nif (stdout !== '') {\n    try {\n        var failedTasks = JSON.parse(stdout);\n        if (failedTasks \u0026\u0026 failedTasks.length \u003e 0) {\n            node.warn('Router blocked by failed task: ' + failedTasks[0].id + '. Waiting for Owner intervention...');\n            node.status({ fill: 'red', shape: 'dot', text: 'Blocked by failed task: ' + failedTasks[0].id });\n            flow.set('is_processing', false);\n            return null;\n        }\n    } catch (e) {\n        node.error('Error parsing failed tasks: ' + e.message);\n    }\n}\nnode.status({ fill: 'green', shape: 'ring', text: 'No blocked tasks' });\nreturn msg;",
+        "g": "41c9cc03de72b45f",
+        "id": "eval-blocked",
+        "initialize": "",
         "libs": [],
-        "x": 430,
-        "y": 220,
+        "name": "Evaluate Blocked",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "check-stuck-tasks"
             ]
-        ]
+        ],
+        "x": 960,
+        "y": 200,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "check-stuck-tasks",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "sqlite3 -json .build/build.db \"SELECT id, title, description, status FROM tasks WHERE status = 'stuck' LIMIT 1\"",
         "addpay": false,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "sqlite3 -json .build/build.db \"SELECT id, title, description, status FROM tasks WHERE status = 'stuck' LIMIT 1\"",
+        "g": "41c9cc03de72b45f",
+        "id": "check-stuck-tasks",
         "name": "Check Stuck Tasks",
-        "x": 650,
-        "y": 220,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "eval-stuck"
             ],
             [],
             []
-        ]
+        ],
+        "x": 1180,
+        "y": 200,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "eval-stuck",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Evaluate Stuck",
-        "func": "var stdout = (msg.payload || '').trim();\nif (stdout !== '') {\n    try {\n        var stuckTasks = JSON.parse(stdout);\n        if (stuckTasks && stuckTasks.length > 0) {\n            var task = stuckTasks[0];\n            node.status({ fill: 'cyan', shape: 'dot', text: 'Lead Escalation for task ' + task.id });\n            msg.task = task;\n            msg.assigneeID = 5;\n            return [null, msg];\n        }\n    } catch (e) {\n        node.error('Error parsing stuck tasks: ' + e.message);\n    }\n}\nreturn [msg, null];\n",
-        "outputs": 2,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var stdout = (msg.payload || '').trim();\nif (stdout !== '') {\n    try {\n        var stuckTasks = JSON.parse(stdout);\n        if (stuckTasks \u0026\u0026 stuckTasks.length \u003e 0) {\n            var task = stuckTasks[0];\n            node.status({ fill: 'cyan', shape: 'dot', text: 'Lead Escalation for task ' + task.id });\n            msg.task = task;\n            msg.assigneeID = 5;\n            return [null, msg];\n        }\n    } catch (e) {\n        node.error('Error parsing stuck tasks: ' + e.message);\n    }\n}\nreturn [msg, null];\n",
+        "g": "41c9cc03de72b45f",
+        "id": "eval-stuck",
+        "initialize": "",
         "libs": [],
-        "x": 870,
-        "y": 220,
+        "name": "Evaluate Stuck",
+        "noerr": 0,
+        "outputs": 2,
+        "type": "function",
         "wires": [
             [
                 "get-next-todo"
@@ -175,74 +251,81 @@
             [
                 "prep-comments-query"
             ]
-        ]
+        ],
+        "x": 1400,
+        "y": 200,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "get-next-todo",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "sqlite3 -json .build/build.db \"SELECT t.id, t.title, t.description, t.agent_id FROM tasks t WHERE t.status = 'todo' AND NOT EXISTS ( SELECT 1 FROM tasks c WHERE c.parent_id = t.id AND c.status = 'todo' ) ORDER BY t.rowid ASC LIMIT 1\"",
         "addpay": false,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "sqlite3 -json .build/build.db \"SELECT t.id, t.title, t.description, t.agent_id FROM tasks t WHERE t.status = 'todo' AND NOT EXISTS ( SELECT 1 FROM tasks c WHERE c.parent_id = t.id AND c.status = 'todo' ) ORDER BY t.rowid ASC LIMIT 1\"",
+        "g": "bd8b1d0d14690530",
+        "id": "get-next-todo",
         "name": "Get Next Todo",
-        "x": 180,
-        "y": 320,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "eval-todo"
             ],
             [],
             []
-        ]
+        ],
+        "x": 1300,
+        "y": 360,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "eval-todo",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Evaluate Todo",
-        "func": "var stdout = (msg.payload || '').trim();\nif (stdout === '') {\n    node.status({ fill: 'green', shape: 'ring', text: 'All tasks finished' });\n    flow.set('is_processing', false);\n    return null;\n}\ntry {\n    var tasks = JSON.parse(stdout);\n    if (!tasks || tasks.length === 0) {\n        node.status({ fill: 'green', shape: 'ring', text: 'All tasks finished' });\n        flow.set('is_processing', false);\n        return null;\n    }\n    var task = tasks[0];\n    msg.task = task;\n    msg.assigneeID = task.agent_id ? parseInt(task.agent_id) : 2;\n    node.status({ fill: 'blue', shape: 'dot', text: 'Task ID: ' + task.id + ' (Assignee: ' + msg.assigneeID + ')' });\n    return msg;\n} catch (e) {\n    node.error('Error parsing todo task: ' + e.message);\n    flow.set('is_processing', false);\n    return null;\n}",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var stdout = (msg.payload || '').trim();\nif (stdout === '') {\n    node.status({ fill: 'green', shape: 'ring', text: 'All tasks finished' });\n    flow.set('is_processing', false);\n    return null;\n}\ntry {\n    var tasks = JSON.parse(stdout);\n    if (!tasks || tasks.length === 0) {\n        node.status({ fill: 'green', shape: 'ring', text: 'All tasks finished' });\n        flow.set('is_processing', false);\n        return null;\n    }\n    var task = tasks[0];\n    msg.task = task;\n    msg.assigneeID = task.agent_id ? parseInt(task.agent_id) : 2;\n    node.status({ fill: 'blue', shape: 'dot', text: 'Task ID: ' + task.id + ' (Assignee: ' + msg.assigneeID + ')' });\n    return msg;\n} catch (e) {\n    node.error('Error parsing todo task: ' + e.message);\n    flow.set('is_processing', false);\n    return null;\n}",
+        "g": "bd8b1d0d14690530",
+        "id": "eval-todo",
+        "initialize": "",
         "libs": [],
-        "x": 400,
-        "y": 320,
+        "name": "Evaluate Todo",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "init-task-assignment"
             ]
-        ]
+        ],
+        "x": 1520,
+        "y": 360,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "init-task-assignment",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Check DB Assignment",
-        "func": "if (!msg.task.agent_id) {\n    msg.needs_db_assignment = true;\n    msg.assigneeID = 2;\n}\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "if (!msg.task.agent_id) {\n    msg.needs_db_assignment = true;\n    msg.assigneeID = 2;\n}\nreturn msg;",
+        "g": "bd8b1d0d14690530",
+        "id": "init-task-assignment",
+        "initialize": "",
         "libs": [],
-        "x": 620,
-        "y": 320,
+        "name": "Check DB Assignment",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "db-assign-check"
             ]
-        ]
+        ],
+        "x": 1740,
+        "y": 360,
+        "z": "build-orchestrator-tab"
     },
     {
+        "checkall": "true",
         "id": "db-assign-check",
-        "type": "switch",
-        "z": "build-orchestrator-tab",
         "name": "DB Assign?",
+        "outputs": 2,
         "property": "needs_db_assignment",
         "propertyType": "msg",
+        "repair": false,
         "rules": [
             {
                 "t": "true"
@@ -251,9 +334,7 @@
                 "t": "else"
             }
         ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
+        "type": "switch",
         "wires": [
             [
                 "prep-db-assignment"
@@ -261,274 +342,278 @@
             [
                 "prep-comments-query"
             ]
-        ]
+        ],
+        "x": 610,
+        "y": 380,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "prep-db-assignment",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Prep DB Assignment",
-        "func": "msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\nreturn msg;",
+        "id": "prep-db-assignment",
+        "initialize": "",
         "libs": [],
-        "x": 800,
-        "y": 280,
+        "name": "Prep DB Assignment",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "update-db-dev-assignment"
             ]
-        ]
+        ],
+        "x": 880,
+        "y": 580,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "update-db-dev-assignment",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "update-db-dev-assignment",
         "name": "DB Dev Assignment",
-        "x": 980,
-        "y": 280,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "prep-comments-query"
             ],
             [],
             []
-        ]
+        ],
+        "x": 1060,
+        "y": 580,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "prep-comments-query",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Prep Comments Query",
-        "func": "msg.payload = \"sqlite3 -json .build/build.db \\\"SELECT a.role, c.content FROM comments c JOIN agents a ON c.agent_id = a.id WHERE c.task_id = '\" + msg.task.id + \"' ORDER BY c.id ASC\\\"\";\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "msg.payload = \"sqlite3 -json .build/build.db \\\"SELECT a.role, c.content FROM comments c JOIN agents a ON c.agent_id = a.id WHERE c.task_id = '\" + msg.task.id + \"' ORDER BY c.id ASC\\\"\";\nreturn msg;",
+        "id": "prep-comments-query",
+        "initialize": "",
         "libs": [],
-        "x": 800,
-        "y": 380,
+        "name": "Prep Comments Query",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "get-comments"
             ]
-        ]
+        ],
+        "x": 800,
+        "y": 380,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "get-comments",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "get-comments",
         "name": "Get Comments",
-        "x": 980,
-        "y": 380,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "parse-comments"
             ],
             [],
             []
-        ]
+        ],
+        "x": 980,
+        "y": 380,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "parse-comments",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Parse Comments",
-        "func": "var stdout = (msg.payload || '').trim();\nvar comments = [];\nif (stdout !== '') {\n    try {\n        comments = JSON.parse(stdout);\n    } catch (e) {\n        node.error('Error parsing comments JSON: ' + e.message);\n    }\n}\nmsg.comments = comments;\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var stdout = (msg.payload || '').trim();\nvar comments = [];\nif (stdout !== '') {\n    try {\n        comments = JSON.parse(stdout);\n    } catch (e) {\n        node.error('Error parsing comments JSON: ' + e.message);\n    }\n}\nmsg.comments = comments;\nreturn msg;",
+        "id": "parse-comments",
+        "initialize": "",
         "libs": [],
-        "x": 150,
-        "y": 480,
+        "name": "Parse Comments",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "prep-template-path"
             ]
-        ]
+        ],
+        "x": 150,
+        "y": 480,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "prep-template-path",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Prep Template File",
-        "func": "var role = 'dev';\nif (msg.assigneeID === 3) role = 'tester';\nelse if (msg.assigneeID === 4) role = 'boss';\nelse if (msg.assigneeID === 5) role = 'lead';\n\nmsg.template_path = 'cmd/build/templates/' + role + '.md';\nmsg.payload = 'cat ' + msg.template_path;\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var role = 'dev';\nif (msg.assigneeID === 3) role = 'tester';\nelse if (msg.assigneeID === 4) role = 'boss';\nelse if (msg.assigneeID === 5) role = 'lead';\n\nmsg.template_path = 'cmd/build/templates/' + role + '.md';\nmsg.payload = 'cat ' + msg.template_path;\nreturn msg;",
+        "id": "prep-template-path",
+        "initialize": "",
         "libs": [],
-        "x": 350,
-        "y": 480,
+        "name": "Prep Template File",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "read-template"
             ]
-        ]
+        ],
+        "x": 350,
+        "y": 480,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "read-template",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "read-template",
         "name": "Read Template",
-        "x": 550,
-        "y": 480,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "format-prompt"
             ],
             [],
             []
-        ]
+        ],
+        "x": 550,
+        "y": 480,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "format-prompt",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Format Prompt",
-        "func": "var template = msg.payload || '';\nvar task = msg.task;\nvar comments = msg.comments || [];\n\nvar commentsHistory = '';\nif (comments.length > 0) {\n    for (var i = 0; i < comments.length; i++) {\n        commentsHistory += comments[i].role + ': ' + comments[i].content + '\\n----------------------------------------\\n';\n    }\n} else {\n    commentsHistory = '(No comments yet)';\n}\n\nvar contextContent = '\\n\\n---\\n### YOUR CURRENT ASSIGNMENT\\nTask ID: ' + task.id + '\\nTitle: ' + task.title + '\\nDescription: ' + (task.description || '') + '\\n\\n### COMMENTS HISTORY\\n' + commentsHistory + '\\n';\n\nmsg.agentPrompt = template + contextContent;\n\n// Write to file inside Node-RED using inline node function (since fs is available, or write command)\n// To be extremely robust, we will write the instructions file via standard echo/printf or node-red write\n// We'll construct a shell command that writes the prompt safely, or writes it using sqlite or standard CLI\n// Let's create a temporary file name:\nvar filepath = '.build/agent_' + msg.assigneeID + '.md';\nmsg.agentFile = filepath;\n\n// We will write this prompt using fs inside Node-RED if we can, or construct an exec command\n// Let's write the command to write the file, then execute the agent, then clean up!\n// We will use standard cat and EOF to write to file safely in msg.payload\nmsg.payload = 'cat << \\'EOF\\' > ' + filepath + '\\n' + msg.agentPrompt + '\\nEOF\\n' + 'agent ' + msg.adapter + ' < ' + filepath + '; rm -f ' + filepath;\n\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var template = msg.payload || '';\nvar task = msg.task;\nvar comments = msg.comments || [];\n\nvar commentsHistory = '';\nif (comments.length \u003e 0) {\n    for (var i = 0; i \u003c comments.length; i++) {\n        commentsHistory += comments[i].role + ': ' + comments[i].content + '\\n----------------------------------------\\n';\n    }\n} else {\n    commentsHistory = '(No comments yet)';\n}\n\nvar contextContent = '\\n\\n---\\n### YOUR CURRENT ASSIGNMENT\\nTask ID: ' + task.id + '\\nTitle: ' + task.title + '\\nDescription: ' + (task.description || '') + '\\n\\n### COMMENTS HISTORY\\n' + commentsHistory + '\\n';\n\nmsg.agentPrompt = template + contextContent;\n\n// Write to file inside Node-RED using inline node function (since fs is available, or write command)\n// To be extremely robust, we will write the instructions file via standard echo/printf or node-red write\n// We'll construct a shell command that writes the prompt safely, or writes it using sqlite or standard CLI\n// Let's create a temporary file name:\nvar filepath = '.build/agent_' + msg.assigneeID + '.md';\nmsg.agentFile = filepath;\n\n// We will write this prompt using fs inside Node-RED if we can, or construct an exec command\n// Let's write the command to write the file, then execute the agent, then clean up!\n// We will use standard cat and EOF to write to file safely in msg.payload\nmsg.payload = 'cat \u003c\u003c \\'EOF\\' \u003e ' + filepath + '\\n' + msg.agentPrompt + '\\nEOF\\n' + 'agent ' + msg.adapter + ' \u003c ' + filepath + '; rm -f ' + filepath;\n\nreturn msg;",
+        "id": "format-prompt",
+        "initialize": "",
         "libs": [],
-        "x": 750,
-        "y": 480,
+        "name": "Format Prompt",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "run-agent"
             ]
-        ]
+        ],
+        "x": 750,
+        "y": 480,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "run-agent",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "run-agent",
         "name": "Execute Agent",
-        "x": 160,
-        "y": 580,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "prep-sweep"
             ],
             [],
             []
-        ]
+        ],
+        "x": 160,
+        "y": 580,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "prep-sweep",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Prep Sweep",
-        "func": "msg.payload = 'agent ' + msg.adapter + ' < cmd/build/templates/sweep.md';\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "msg.payload = 'agent ' + msg.adapter + ' \u003c cmd/build/templates/sweep.md';\nreturn msg;",
+        "id": "prep-sweep",
+        "initialize": "",
         "libs": [],
-        "x": 350,
-        "y": 580,
+        "name": "Prep Sweep",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "run-sweep"
             ]
-        ]
+        ],
+        "x": 350,
+        "y": 580,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "run-sweep",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "run-sweep",
         "name": "Execute Sweep",
-        "x": 530,
-        "y": 580,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "git-commit"
             ],
             [],
             []
-        ]
+        ],
+        "x": 530,
+        "y": 580,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "git-commit",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "git add . && git status --porcelain",
         "addpay": false,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "git add . \u0026\u0026 git status --porcelain",
+        "id": "git-commit",
         "name": "Git Status",
-        "x": 710,
-        "y": 580,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "eval-commit"
             ],
             [],
             []
-        ]
+        ],
+        "x": 710,
+        "y": 580,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "eval-commit",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Check Git changes",
-        "func": "var stdout = (msg.payload || '').trim();\nif (stdout !== '') {\n    var roleName = 'Unknown';\n    if (msg.assigneeID === 2) roleName = 'Dev';\n    else if (msg.assigneeID === 3) roleName = 'Tester';\n    else if (msg.assigneeID === 4) roleName = 'Boss';\n    else if (msg.assigneeID === 5) roleName = 'Lead';\n    \n    var commitMsg = 'build: updates for task ' + msg.task.id + ' by ' + roleName;\n    msg.payload = 'git commit -m \"' + commitMsg + '\"';\n    msg.has_changes = true;\n} else {\n    msg.has_changes = false;\n}\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var stdout = (msg.payload || '').trim();\nif (stdout !== '') {\n    var roleName = 'Unknown';\n    if (msg.assigneeID === 2) roleName = 'Dev';\n    else if (msg.assigneeID === 3) roleName = 'Tester';\n    else if (msg.assigneeID === 4) roleName = 'Boss';\n    else if (msg.assigneeID === 5) roleName = 'Lead';\n    \n    var commitMsg = 'build: updates for task ' + msg.task.id + ' by ' + roleName;\n    msg.payload = 'git commit -m \"' + commitMsg + '\"';\n    msg.has_changes = true;\n} else {\n    msg.has_changes = false;\n}\nreturn msg;",
+        "id": "eval-commit",
+        "initialize": "",
         "libs": [],
-        "x": 160,
-        "y": 680,
+        "name": "Check Git changes",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "git-commit-switch"
             ]
-        ]
+        ],
+        "x": 160,
+        "y": 680,
+        "z": "build-orchestrator-tab"
     },
     {
+        "checkall": "true",
         "id": "git-commit-switch",
-        "type": "switch",
-        "z": "build-orchestrator-tab",
         "name": "Commit?",
+        "outputs": 2,
         "property": "has_changes",
         "propertyType": "msg",
+        "repair": false,
         "rules": [
             {
                 "t": "true"
@@ -537,9 +622,7 @@
                 "t": "else"
             }
         ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
+        "type": "switch",
         "wires": [
             [
                 "git-commit-exec"
@@ -547,36 +630,40 @@
             [
                 "post-session-routing"
             ]
-        ]
+        ],
+        "x": 120,
+        "y": 380,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "git-commit-exec",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "git-commit-exec",
         "name": "Git Commit",
-        "x": 370,
-        "y": 680,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "post-session-routing"
             ],
             [],
             []
-        ]
+        ],
+        "x": 370,
+        "y": 680,
+        "z": "build-orchestrator-tab"
     },
     {
+        "checkall": "true",
         "id": "post-session-routing",
-        "type": "switch",
-        "z": "build-orchestrator-tab",
         "name": "Route Post-Session",
+        "outputs": 4,
         "property": "assigneeID",
         "propertyType": "msg",
+        "repair": false,
         "rules": [
             {
                 "t": "eq",
@@ -599,9 +686,7 @@
                 "vt": "num"
             }
         ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 4,
+        "type": "switch",
         "wires": [
             [
                 "prep-dev-transition"
@@ -615,61 +700,61 @@
             [
                 "prep-lead-transition"
             ]
-        ]
+        ],
+        "x": 400,
+        "y": 380,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "prep-dev-transition",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Prep Dev Transition",
-        "func": "msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 3 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_tester', '\" + msg.adapter + \"', '', 'build');\\\"\";\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 3 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_tester', '\" + msg.adapter + \"', '', 'build');\\\"\";\nreturn msg;",
+        "id": "prep-dev-transition",
+        "initialize": "",
         "libs": [],
-        "x": 620,
-        "y": 680,
+        "name": "Prep Dev Transition",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "post-dev-transition"
             ]
-        ]
+        ],
+        "x": 620,
+        "y": 680,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "post-dev-transition",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "post-dev-transition",
         "name": "Handoff to Tester",
-        "x": 840,
-        "y": 680,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "release-lock"
             ],
             [],
             []
-        ]
+        ],
+        "x": 840,
+        "y": 680,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "run-tester-suite",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "./.build/test",
         "addpay": false,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "./.build/test",
+        "id": "run-tester-suite",
         "name": "Run Workspace Tests",
-        "x": 620,
-        "y": 740,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "prep-tester-pass"
@@ -678,194 +763,198 @@
                 "prep-tester-fail"
             ],
             []
-        ]
+        ],
+        "x": 620,
+        "y": 740,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "prep-tester-pass",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Prep Tester Pass",
-        "func": "var instructionMsg = '**CRITICAL**: Please review task ' + msg.task.id + ' and provide your feedback using the `build review` command.\\n\\n' +\n    'The syntax is:\\n' +\n    'build review ' + msg.task.id + ' <approve|reject> \"<reasoning>\"\\n\\n' +\n    'RULES:\\n' +\n    '1. Your reasoning MUST be a single line of text.\\n' +\n    '2. Enclose your reasoning in double quotes (\").\\n' +\n    '3. DO NOT use double quotes inside your reasoning string (use single quotes instead).\\n' +\n    '4. DO NOT ask questions; provide ONLY the final review via the bash tool.';\n\nmsg.payload = \"sqlite3 .build/build.db \\\"INSERT INTO comments (task_id, agent_id, content) VALUES ('\" + msg.task.id + \"', 1, '\" + instructionMsg.replace(/'/g, \"''\") + \"'); UPDATE tasks SET agent_id = 4 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_boss', '\" + msg.adapter + \"', '', 'build');\\\"\";\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var instructionMsg = '**CRITICAL**: Please review task ' + msg.task.id + ' and provide your feedback using the `build review` command.\\n\\n' +\n    'The syntax is:\\n' +\n    'build review ' + msg.task.id + ' \u003capprove|reject\u003e \"\u003creasoning\u003e\"\\n\\n' +\n    'RULES:\\n' +\n    '1. Your reasoning MUST be a single line of text.\\n' +\n    '2. Enclose your reasoning in double quotes (\").\\n' +\n    '3. DO NOT use double quotes inside your reasoning string (use single quotes instead).\\n' +\n    '4. DO NOT ask questions; provide ONLY the final review via the bash tool.';\n\nmsg.payload = \"sqlite3 .build/build.db \\\"INSERT INTO comments (task_id, agent_id, content) VALUES ('\" + msg.task.id + \"', 1, '\" + instructionMsg.replace(/'/g, \"''\") + \"'); UPDATE tasks SET agent_id = 4 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_boss', '\" + msg.adapter + \"', '', 'build');\\\"\";\nreturn msg;",
+        "id": "prep-tester-pass",
+        "initialize": "",
         "libs": [],
-        "x": 830,
-        "y": 720,
+        "name": "Prep Tester Pass",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "eval-tests-pass"
             ]
-        ]
+        ],
+        "x": 830,
+        "y": 720,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "eval-tests-pass",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "eval-tests-pass",
         "name": "Tester Pass Update",
-        "x": 1030,
-        "y": 720,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "release-lock"
             ],
             [],
             []
-        ]
+        ],
+        "x": 1030,
+        "y": 720,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "prep-tester-fail",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Prep Tester Fail",
-        "func": "var errorMsg = 'Tests failed:\\n' + msg.payload;\n// Fetch current approval attempts via subquery or just perform update with attempts incremented\nmsg.payload = \"sqlite3 .build/build.db \\\"INSERT INTO comments (task_id, agent_id, content) VALUES ('\" + msg.task.id + \"', 3, '\" + errorMsg.replace(/'/g, \"''\") + \"'); UPDATE tasks SET approval_attempts = approval_attempts + 1 WHERE id = '\" + msg.task.id + \"';\\\" && \" +\n    \"sqlite3 -json .build/build.db \\\"SELECT approval_attempts, lead_interventions FROM tasks WHERE id = '\" + msg.task.id + \"'\\\"\";\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var errorMsg = 'Tests failed:\\n' + msg.payload;\n// Fetch current approval attempts via subquery or just perform update with attempts incremented\nmsg.payload = \"sqlite3 .build/build.db \\\"INSERT INTO comments (task_id, agent_id, content) VALUES ('\" + msg.task.id + \"', 3, '\" + errorMsg.replace(/'/g, \"''\") + \"'); UPDATE tasks SET approval_attempts = approval_attempts + 1 WHERE id = '\" + msg.task.id + \"';\\\" \u0026\u0026 \" +\n    \"sqlite3 -json .build/build.db \\\"SELECT approval_attempts, lead_interventions FROM tasks WHERE id = '\" + msg.task.id + \"'\\\"\";\nreturn msg;",
+        "id": "prep-tester-fail",
+        "initialize": "",
         "libs": [],
-        "x": 830,
-        "y": 770,
+        "name": "Prep Tester Fail",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "query-attempts-after-fail"
             ]
-        ]
+        ],
+        "x": 830,
+        "y": 770,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "query-attempts-after-fail",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "query-attempts-after-fail",
         "name": "Query Attempts After Fail",
-        "x": 1040,
-        "y": 770,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "eval-tester-escalation"
             ],
             [],
             []
-        ]
+        ],
+        "x": 1040,
+        "y": 770,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "eval-tester-escalation",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Eval Tester Escalation",
-        "func": "var stdout = (msg.payload || '').trim();\ntry {\n    var res = JSON.parse(stdout);\n    var attempts = res[0].approval_attempts;\n    var lead_interventions = res[0].lead_interventions;\n    \n    if (attempts >= 3) {\n        if (lead_interventions < 3) {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'stuck', agent_id = 5, approval_attempts = 0, lead_interventions = lead_interventions + 1 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'escalate_to_lead', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        } else {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = '\" + attempts + \"' WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_rejected', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        }\n    } else {\n        msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\n    }\n} catch (e) {\n    node.error('Error parsing attempts JSON: ' + e.message);\n    // Fallback to dev\n    msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"';\\\"\";\n}\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var stdout = (msg.payload || '').trim();\ntry {\n    var res = JSON.parse(stdout);\n    var attempts = res[0].approval_attempts;\n    var lead_interventions = res[0].lead_interventions;\n    \n    if (attempts \u003e= 3) {\n        if (lead_interventions \u003c 3) {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'stuck', agent_id = 5, approval_attempts = 0, lead_interventions = lead_interventions + 1 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'escalate_to_lead', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        } else {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = '\" + attempts + \"' WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_rejected', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        }\n    } else {\n        msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\n    }\n} catch (e) {\n    node.error('Error parsing attempts JSON: ' + e.message);\n    // Fallback to dev\n    msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"';\\\"\";\n}\nreturn msg;",
+        "id": "eval-tester-escalation",
+        "initialize": "",
         "libs": [],
-        "x": 1260,
-        "y": 770,
+        "name": "Eval Tester Escalation",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "eval-tests-fail"
             ]
-        ]
+        ],
+        "x": 1260,
+        "y": 770,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "eval-tests-fail",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "eval-tests-fail",
         "name": "Tester Fail Update",
-        "x": 1460,
-        "y": 770,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "release-lock"
             ],
             [],
             []
-        ]
+        ],
+        "x": 1460,
+        "y": 770,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "prep-boss-last-comment",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Prep Boss Comment Query",
-        "func": "msg.payload = \"sqlite3 -json .build/build.db \\\"SELECT content FROM comments WHERE task_id = '\" + msg.task.id + \"' AND agent_id = 4 ORDER BY id DESC LIMIT 1\\\"\";\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "msg.payload = \"sqlite3 -json .build/build.db \\\"SELECT content FROM comments WHERE task_id = '\" + msg.task.id + \"' AND agent_id = 4 ORDER BY id DESC LIMIT 1\\\"\";\nreturn msg;",
+        "id": "prep-boss-last-comment",
+        "initialize": "",
         "libs": [],
-        "x": 180,
-        "y": 800,
+        "name": "Prep Boss Comment Query",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "post-boss-query-last-comment"
             ]
-        ]
+        ],
+        "x": 180,
+        "y": 800,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "post-boss-query-last-comment",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "post-boss-query-last-comment",
         "name": "Get Last Boss Comment",
-        "x": 390,
-        "y": 800,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "eval-boss-comment"
             ],
             [],
             []
-        ]
+        ],
+        "x": 390,
+        "y": 800,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "eval-boss-comment",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Evaluate Boss Decision",
-        "func": "var stdout = (msg.payload || '').trim();\nif (stdout === '') {\n    msg.boss_eval_status = 'format_error';\n    msg.error_reason = 'System Error: You exited without leaving a review. You MUST use build review to leave your evaluation.';\n    return msg;\n}\n\ntry {\n    var comments = JSON.parse(stdout);\n    if (!comments || comments.length === 0) {\n        msg.boss_eval_status = 'format_error';\n        msg.error_reason = 'System Error: No comments found. You MUST leave your evaluation.';\n        return msg;\n    }\n    \n    var lastComment = comments[0].content || '';\n    var cleaned = lastComment.replace(/```json/g, '').replace(/```/g, '').trim();\n    var payload = JSON.parse(cleaned);\n    \n    if (typeof payload.approval !== 'boolean' || !payload.reasoning) {\n        msg.boss_eval_status = 'format_error';\n        msg.error_reason = 'System Error: Missing approval (boolean) or reasoning (string) in your payload.';\n        return msg;\n    }\n    \n    msg.boss_approval = payload.approval;\n    msg.boss_reasoning = payload.reasoning;\n    msg.boss_eval_status = payload.approval ? 'approved' : 'rejected';\n} catch (e) {\n    msg.boss_eval_status = 'format_error';\n    msg.error_reason = 'System Error: Your review was not correctly formatted JSON. Please use build review.';\n}\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var stdout = (msg.payload || '').trim();\nif (stdout === '') {\n    msg.boss_eval_status = 'format_error';\n    msg.error_reason = 'System Error: You exited without leaving a review. You MUST use build review to leave your evaluation.';\n    return msg;\n}\n\ntry {\n    var comments = JSON.parse(stdout);\n    if (!comments || comments.length === 0) {\n        msg.boss_eval_status = 'format_error';\n        msg.error_reason = 'System Error: No comments found. You MUST leave your evaluation.';\n        return msg;\n    }\n    \n    var lastComment = comments[0].content || '';\n    var cleaned = lastComment.replace(/```json/g, '').replace(/```/g, '').trim();\n    var payload = JSON.parse(cleaned);\n    \n    if (typeof payload.approval !== 'boolean' || !payload.reasoning) {\n        msg.boss_eval_status = 'format_error';\n        msg.error_reason = 'System Error: Missing approval (boolean) or reasoning (string) in your payload.';\n        return msg;\n    }\n    \n    msg.boss_approval = payload.approval;\n    msg.boss_reasoning = payload.reasoning;\n    msg.boss_eval_status = payload.approval ? 'approved' : 'rejected';\n} catch (e) {\n    msg.boss_eval_status = 'format_error';\n    msg.error_reason = 'System Error: Your review was not correctly formatted JSON. Please use build review.';\n}\nreturn msg;",
+        "id": "eval-boss-comment",
+        "initialize": "",
         "libs": [],
-        "x": 610,
-        "y": 800,
+        "name": "Evaluate Boss Decision",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "boss-decision-routing"
             ]
-        ]
+        ],
+        "x": 610,
+        "y": 800,
+        "z": "build-orchestrator-tab"
     },
     {
+        "checkall": "true",
         "id": "boss-decision-routing",
-        "type": "switch",
-        "z": "build-orchestrator-tab",
         "name": "Boss Decision?",
+        "outputs": 3,
         "property": "boss_eval_status",
         "propertyType": "msg",
+        "repair": false,
         "rules": [
             {
                 "t": "eq",
@@ -883,9 +972,7 @@
                 "vt": "str"
             }
         ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 3,
+        "type": "switch",
         "wires": [
             [
                 "prep-boss-approve"
@@ -896,303 +983,306 @@
             [
                 "prep-boss-format-err"
             ]
-        ]
+        ],
+        "x": 200,
+        "y": 740,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "prep-boss-approve",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Prep Boss Approve",
-        "func": "msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'done' WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_approved', '\" + msg.adapter + \"', '', 'build');\\\"\";\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'done' WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_approved', '\" + msg.adapter + \"', '', 'build');\\\"\";\nreturn msg;",
+        "id": "prep-boss-approve",
+        "initialize": "",
         "libs": [],
-        "x": 180,
-        "y": 900,
+        "name": "Prep Boss Approve",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "boss-approve-exec"
             ]
-        ]
+        ],
+        "x": 180,
+        "y": 900,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "boss-approve-exec",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "boss-approve-exec",
         "name": "Boss Approve Update",
-        "x": 380,
-        "y": 900,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "release-lock"
             ],
             [],
             []
-        ]
+        ],
+        "x": 380,
+        "y": 900,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "prep-boss-reject",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Prep Boss Reject",
-        "func": "msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET approval_attempts = approval_attempts + 1 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_rejected', '\" + msg.adapter + \"', '', 'build');\\\" && \" +\n    \"sqlite3 -json .build/build.db \\\"SELECT approval_attempts, lead_interventions FROM tasks WHERE id = '\" + msg.task.id + \"'\\\"\";\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET approval_attempts = approval_attempts + 1 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_rejected', '\" + msg.adapter + \"', '', 'build');\\\" \u0026\u0026 \" +\n    \"sqlite3 -json .build/build.db \\\"SELECT approval_attempts, lead_interventions FROM tasks WHERE id = '\" + msg.task.id + \"'\\\"\";\nreturn msg;",
+        "id": "prep-boss-reject",
+        "initialize": "",
         "libs": [],
-        "x": 580,
-        "y": 900,
+        "name": "Prep Boss Reject",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "boss-attempts-query"
             ]
-        ]
+        ],
+        "x": 580,
+        "y": 900,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "boss-attempts-query",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "boss-attempts-query",
         "name": "Boss Attempts Query",
-        "x": 780,
-        "y": 900,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "eval-boss-escalation"
             ],
             [],
             []
-        ]
+        ],
+        "x": 780,
+        "y": 900,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "eval-boss-escalation",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Eval Boss Escalation",
-        "func": "var stdout = (msg.payload || '').trim();\ntry {\n    var res = JSON.parse(stdout);\n    var attempts = res[0].approval_attempts;\n    var lead_interventions = res[0].lead_interventions;\n    \n    if (attempts >= 3) {\n        if (lead_interventions < 3) {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'stuck', agent_id = 5, approval_attempts = 0, lead_interventions = lead_interventions + 1 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'escalate_to_lead', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        } else {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = '\" + attempts + \"' WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_rejected', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        }\n    } else {\n        msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\n    }\n} catch (e) {\n    node.error('Error parsing boss attempts: ' + e.message);\n    msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"';\\\"\";\n}\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var stdout = (msg.payload || '').trim();\ntry {\n    var res = JSON.parse(stdout);\n    var attempts = res[0].approval_attempts;\n    var lead_interventions = res[0].lead_interventions;\n    \n    if (attempts \u003e= 3) {\n        if (lead_interventions \u003c 3) {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'stuck', agent_id = 5, approval_attempts = 0, lead_interventions = lead_interventions + 1 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'escalate_to_lead', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        } else {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = '\" + attempts + \"' WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_rejected', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        }\n    } else {\n        msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\n    }\n} catch (e) {\n    node.error('Error parsing boss attempts: ' + e.message);\n    msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"';\\\"\";\n}\nreturn msg;",
+        "id": "eval-boss-escalation",
+        "initialize": "",
         "libs": [],
-        "x": 980,
-        "y": 900,
+        "name": "Eval Boss Escalation",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "boss-reject-exec"
             ]
-        ]
+        ],
+        "x": 980,
+        "y": 900,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "boss-reject-exec",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "boss-reject-exec",
         "name": "Boss Reject Update",
-        "x": 1180,
-        "y": 900,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "release-lock"
             ],
             [],
             []
-        ]
+        ],
+        "x": 1180,
+        "y": 900,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "prep-boss-format-err",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Prep Boss Format Error",
-        "func": "var formatErrMsg = msg.error_reason || 'System Error: Format validation failed.';\nmsg.payload = \"sqlite3 .build/build.db \\\"INSERT INTO comments (task_id, agent_id, content) VALUES ('\" + msg.task.id + \"', 1, '\" + formatErrMsg.replace(/'/g, \"''\") + \"'); UPDATE tasks SET approval_attempts = approval_attempts + 1 WHERE id = '\" + msg.task.id + \"';\\\" && \" +\n    \"sqlite3 -json .build/build.db \\\"SELECT approval_attempts, lead_interventions FROM tasks WHERE id = '\" + msg.task.id + \"'\\\"\";\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var formatErrMsg = msg.error_reason || 'System Error: Format validation failed.';\nmsg.payload = \"sqlite3 .build/build.db \\\"INSERT INTO comments (task_id, agent_id, content) VALUES ('\" + msg.task.id + \"', 1, '\" + formatErrMsg.replace(/'/g, \"''\") + \"'); UPDATE tasks SET approval_attempts = approval_attempts + 1 WHERE id = '\" + msg.task.id + \"';\\\" \u0026\u0026 \" +\n    \"sqlite3 -json .build/build.db \\\"SELECT approval_attempts, lead_interventions FROM tasks WHERE id = '\" + msg.task.id + \"'\\\"\";\nreturn msg;",
+        "id": "prep-boss-format-err",
+        "initialize": "",
         "libs": [],
-        "x": 590,
-        "y": 950,
+        "name": "Prep Boss Format Error",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "boss-format-err-attempts-query"
             ]
-        ]
+        ],
+        "x": 590,
+        "y": 950,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "boss-format-err-attempts-query",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "boss-format-err-attempts-query",
         "name": "Boss Format Error Attempts",
-        "x": 810,
-        "y": 950,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "eval-boss-format-err-escalation"
             ],
             [],
             []
-        ]
+        ],
+        "x": 810,
+        "y": 950,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "eval-boss-format-err-escalation",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Eval Format Error Escalation",
-        "func": "var stdout = (msg.payload || '').trim();\ntry {\n    var res = JSON.parse(stdout);\n    var attempts = res[0].approval_attempts;\n    var lead_interventions = res[0].lead_interventions;\n    \n    if (attempts >= 3) {\n        if (lead_interventions < 3) {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'stuck', agent_id = 5, approval_attempts = 0, lead_interventions = lead_interventions + 1 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'escalate_to_lead', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        } else {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = '\" + attempts + \"' WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_rejected', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        }\n    } else {\n        msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 4 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_boss', '\" + msg.adapter + \"', '', 'build');\\\"\";\n    }\n} catch (e) {\n    node.error('Error parsing format err boss attempts: ' + e.message);\n    msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 4 WHERE id = '\" + msg.task.id + \"';\\\"\";\n}\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var stdout = (msg.payload || '').trim();\ntry {\n    var res = JSON.parse(stdout);\n    var attempts = res[0].approval_attempts;\n    var lead_interventions = res[0].lead_interventions;\n    \n    if (attempts \u003e= 3) {\n        if (lead_interventions \u003c 3) {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'stuck', agent_id = 5, approval_attempts = 0, lead_interventions = lead_interventions + 1 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'escalate_to_lead', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        } else {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = '\" + attempts + \"' WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_rejected', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        }\n    } else {\n        msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 4 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_boss', '\" + msg.adapter + \"', '', 'build');\\\"\";\n    }\n} catch (e) {\n    node.error('Error parsing format err boss attempts: ' + e.message);\n    msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 4 WHERE id = '\" + msg.task.id + \"';\\\"\";\n}\nreturn msg;",
+        "id": "eval-boss-format-err-escalation",
+        "initialize": "",
         "libs": [],
-        "x": 1030,
-        "y": 950,
+        "name": "Eval Format Error Escalation",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "boss-format-err-exec"
             ]
-        ]
+        ],
+        "x": 1030,
+        "y": 950,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "boss-format-err-exec",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "boss-format-err-exec",
         "name": "Boss Format Error Update",
-        "x": 1250,
-        "y": 950,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "release-lock"
             ],
             [],
             []
-        ]
+        ],
+        "x": 1250,
+        "y": 950,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "prep-lead-transition",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Prep Lead Transition",
-        "func": "msg.payload = \"sqlite3 -json .build/build.db \\\"SELECT COUNT(*) as count FROM comments WHERE task_id = '\" + msg.task.id + \"' AND agent_id = 5\\\"\";\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "msg.payload = \"sqlite3 -json .build/build.db \\\"SELECT COUNT(*) as count FROM comments WHERE task_id = '\" + msg.task.id + \"' AND agent_id = 5\\\"\";\nreturn msg;",
+        "id": "prep-lead-transition",
+        "initialize": "",
         "libs": [],
-        "x": 160,
-        "y": 1040,
+        "name": "Prep Lead Transition",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "lead-comment-check"
             ]
-        ]
+        ],
+        "x": 160,
+        "y": 1040,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "lead-comment-check",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "lead-comment-check",
         "name": "Lead Comment Check",
-        "x": 360,
-        "y": 1040,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "eval-lead-comment"
             ],
             [],
             []
-        ]
+        ],
+        "x": 360,
+        "y": 1040,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "eval-lead-comment",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Eval Lead Comment",
-        "func": "var stdout = (msg.payload || '').trim();\nvar count = 0;\ntry {\n    var res = JSON.parse(stdout);\n    count = res[0].count;\n} catch (e) {\n    node.error('Error parsing lead comment check: ' + e.message);\n}\n\nvar sql = '';\nif (count === 0) {\n    var note = 'System Note: The Lead Engineer reviewed the task but failed to leave explicit instructions. Developer, please carefully review the previous failures and try again.';\n    sql += \"sqlite3 .build/build.db \\\"INSERT INTO comments (task_id, agent_id, content) VALUES ('\" + msg.task.id + \"', 1, '\" + note + \"'); UPDATE tasks SET status = 'todo', agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\n} else {\n    sql += \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'todo', agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\n}\nmsg.payload = sql;\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "var stdout = (msg.payload || '').trim();\nvar count = 0;\ntry {\n    var res = JSON.parse(stdout);\n    count = res[0].count;\n} catch (e) {\n    node.error('Error parsing lead comment check: ' + e.message);\n}\n\nvar sql = '';\nif (count === 0) {\n    var note = 'System Note: The Lead Engineer reviewed the task but failed to leave explicit instructions. Developer, please carefully review the previous failures and try again.';\n    sql += \"sqlite3 .build/build.db \\\"INSERT INTO comments (task_id, agent_id, content) VALUES ('\" + msg.task.id + \"', 1, '\" + note + \"'); UPDATE tasks SET status = 'todo', agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\n} else {\n    sql += \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'todo', agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\n}\nmsg.payload = sql;\nreturn msg;",
+        "id": "eval-lead-comment",
+        "initialize": "",
         "libs": [],
-        "x": 560,
-        "y": 1040,
+        "name": "Eval Lead Comment",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             [
                 "post-lead-transition"
             ]
-        ]
+        ],
+        "x": 560,
+        "y": 1040,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "post-lead-transition",
-        "type": "exec",
-        "z": "build-orchestrator-tab",
-        "command": "",
         "addpay": true,
         "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
+        "command": "",
+        "id": "post-lead-transition",
         "name": "Lead Transition Exec",
-        "x": 760,
-        "y": 1040,
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
         "wires": [
             [
                 "release-lock"
             ],
             [],
             []
-        ]
+        ],
+        "x": 760,
+        "y": 1040,
+        "z": "build-orchestrator-tab"
     },
     {
-        "id": "release-lock",
-        "type": "function",
-        "z": "build-orchestrator-tab",
-        "name": "Release Lock",
-        "func": "flow.set('is_processing', false);\nnode.status({ fill: 'green', shape: 'ring', text: 'Lock released / Idle' });\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
         "finalize": "",
+        "func": "flow.set('is_processing', false);\nnode.status({ fill: 'green', shape: 'ring', text: 'Lock released / Idle' });\nreturn msg;",
+        "id": "release-lock",
+        "initialize": "",
         "libs": [],
-        "x": 1280,
-        "y": 620,
+        "name": "Release Lock",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
         "wires": [
             []
-        ]
+        ],
+        "x": 1280,
+        "y": 620,
+        "z": "build-orchestrator-tab"
     }
 ]
