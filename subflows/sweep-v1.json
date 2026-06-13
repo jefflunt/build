@@ -120,9 +120,7 @@
             [
                 "git-commit-exec"
             ],
-            [
-                "post-session-routing"
-            ]
+            []
         ],
         "x": 120,
         "y": 380,
@@ -139,9 +137,7 @@
         "type": "exec",
         "useSpawn": "false",
         "wires": [
-            [
-                "post-session-routing"
-            ],
+            [],
             [],
             []
         ],

@@ -11,7 +11,6 @@
     },
     {
         "crontab": "",
-        "g": "bef2c4cc24966901",
         "id": "inject-poll",
         "name": "Poll Task DB",
         "once": true,
@@ -42,7 +41,6 @@
     {
         "finalize": "",
         "func": "if (flow.get('is_processing') === true) {\n    node.status({ fill: 'yellow', shape: 'ring', text: 'Locked (already processing)' });\n    return null;\n}\n\nflow.set('is_processing', true);\nnode.status({ fill: 'blue', shape: 'dot', text: 'Lock acquired' });\nreturn msg;",
-        "g": "bef2c4cc24966901",
         "id": "check-lock",
         "initialize": "",
         "libs": [],
@@ -63,7 +61,6 @@
         "addpay": false,
         "append": "",
         "command": "cat ~/.build/config.yml",
-        "g": "bef2c4cc24966901",
         "id": "get-config",
         "name": "Read Config",
         "oldrc": false,
@@ -84,7 +81,6 @@
     {
         "finalize": "",
         "func": "var content = msg.payload || '';\nvar lines = content.split('\\n');\nvar adapter = 'live_opencode';\nvar nodeRedUrl = 'http://localhost:1880';\n\nfor (var i = 0; i \u003c lines.length; i++) {\n    var line = lines[i].trim();\n    if (line === '' || line.indexOf('#') === 0) continue;\n    var parts = line.split(':');\n    if (parts.length \u003e= 2) {\n        var key = parts[0].trim();\n        var val = parts.slice(1).join(':').trim();\n        // Strip quotes\n        if ((val.indexOf('\"') === 0 \u0026\u0026 val.lastIndexOf('\"') === val.length - 1) ||\n            (val.indexOf(\"'\") === 0 \u0026\u0026 val.lastIndexOf(\"'\") === val.length - 1)) {\n            val = val.substring(1, val.length - 1);\n        }\n        if (key === 'agent_adapter') {\n            var adapterParts = val.split(':');\n            adapter = adapterParts.length \u003e 1 ? adapterParts[1].trim() : val;\n        } else if (key === 'node_red_url') {\n            nodeRedUrl = val;\n        }\n    }\n}\n\nmsg.adapter = adapter;\nmsg.nodeRedUrl = nodeRedUrl;\nnode.status({ fill: 'green', shape: 'dot', text: 'Adapter: ' + adapter });\nreturn msg;",
-        "g": "bef2c4cc24966901",
         "id": "parse-config",
         "initialize": "",
         "libs": [],
@@ -105,7 +101,6 @@
         "addpay": false,
         "append": "",
         "command": "build task blocked",
-        "g": "41c9cc03de72b45f",
         "id": "check-blocked-tasks",
         "name": "Check Blocked Tasks",
         "oldrc": false,
@@ -126,7 +121,6 @@
     {
         "finalize": "",
         "func": "var stdout = (msg.payload || '').trim();\nif (stdout !== '') {\n    try {\n        var failedTasks = JSON.parse(stdout);\n        if (failedTasks \u0026\u0026 failedTasks.length \u003e 0) {\n            node.warn('Router blocked by failed task: ' + failedTasks[0].id + '. Waiting for Owner intervention...');\n            node.status({ fill: 'red', shape: 'dot', text: 'Blocked by failed task: ' + failedTasks[0].id });\n            flow.set('is_processing', false);\n            return null;\n        }\n    } catch (e) {\n        node.error('Error parsing failed tasks: ' + e.message);\n    }\n}\nnode.status({ fill: 'green', shape: 'ring', text: 'No blocked tasks' });\nreturn msg;",
-        "g": "41c9cc03de72b45f",
         "id": "eval-blocked",
         "initialize": "",
         "libs": [],
@@ -147,7 +141,6 @@
         "addpay": false,
         "append": "",
         "command": "build task stuck",
-        "g": "41c9cc03de72b45f",
         "id": "check-stuck-tasks",
         "name": "Check Stuck Tasks",
         "oldrc": false,
@@ -168,7 +161,6 @@
     {
         "finalize": "",
         "func": "var stdout = (msg.payload || '').trim();\nif (stdout !== '') {\n    try {\n        var stuckTasks = JSON.parse(stdout);\n        if (stuckTasks \u0026\u0026 stuckTasks.length \u003e 0) {\n            var task = stuckTasks[0];\n            node.status({ fill: 'cyan', shape: 'dot', text: 'Lead Escalation for task ' + task.id });\n            msg.task = task;\n            msg.assigneeID = 5;\n            return [null, msg];\n        }\n    } catch (e) {\n        node.error('Error parsing stuck tasks: ' + e.message);\n    }\n}\nreturn [msg, null];\n",
-        "g": "41c9cc03de72b45f",
         "id": "eval-stuck",
         "initialize": "",
         "libs": [],
@@ -180,9 +172,7 @@
             [
                 "get-next-todo"
             ],
-            [
-                "prep-comments-query"
-            ]
+            []
         ],
         "x": 1400,
         "y": 200,
@@ -192,7 +182,6 @@
         "addpay": false,
         "append": "",
         "command": "build task next",
-        "g": "bd8b1d0d14690530",
         "id": "get-next-todo",
         "name": "Get Next Todo",
         "oldrc": false,
@@ -213,7 +202,6 @@
     {
         "finalize": "",
         "func": "var stdout = (msg.payload || '').trim();\nif (stdout === '') {\n    node.status({ fill: 'green', shape: 'ring', text: 'All tasks finished' });\n    flow.set('is_processing', false);\n    return null;\n}\ntry {\n    var tasks = JSON.parse(stdout);\n    if (!tasks || tasks.length === 0) {\n        node.status({ fill: 'green', shape: 'ring', text: 'All tasks finished' });\n        flow.set('is_processing', false);\n        return null;\n    }\n    var task = tasks[0];\n    msg.task = task;\n    msg.assigneeID = task.agent_id ? parseInt(task.agent_id) : 2;\n    node.status({ fill: 'blue', shape: 'dot', text: 'Task ID: ' + task.id + ' (Assignee: ' + msg.assigneeID + ')' });\n    return msg;\n} catch (e) {\n    node.error('Error parsing todo task: ' + e.message);\n    flow.set('is_processing', false);\n    return null;\n}",
-        "g": "bd8b1d0d14690530",
         "id": "eval-todo",
         "initialize": "",
         "libs": [],
@@ -233,7 +221,6 @@
     {
         "finalize": "",
         "func": "if (!msg.task.agent_id) {\n    msg.needs_db_assignment = true;\n    msg.assigneeID = 2;\n}\nreturn msg;",
-        "g": "bd8b1d0d14690530",
         "id": "init-task-assignment",
         "initialize": "",
         "libs": [],
@@ -242,9 +229,7 @@
         "outputs": 1,
         "type": "function",
         "wires": [
-            [
-                "db-assign-check"
-            ]
+            []
         ],
         "x": 1740,
         "y": 360,

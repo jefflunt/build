@@ -30,9 +30,7 @@
             [
                 "prep-db-assignment"
             ],
-            [
-                "prep-comments-query"
-            ]
+            []
         ],
         "x": 610,
         "y": 380,
@@ -68,9 +66,7 @@
         "type": "exec",
         "useSpawn": "false",
         "wires": [
-            [
-                "prep-comments-query"
-            ],
+            [],
             [],
             []
         ],
@@ -113,15 +109,9 @@
             [
                 "prep-dev-transition"
             ],
-            [
-                "run-tester-suite"
-            ],
-            [
-                "prep-boss-last-comment"
-            ],
-            [
-                "prep-lead-transition"
-            ]
+            [],
+            [],
+            []
         ],
         "x": 400,
         "y": 380,

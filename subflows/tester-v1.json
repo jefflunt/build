@@ -72,9 +72,7 @@
         "type": "exec",
         "useSpawn": "false",
         "wires": [
-            [
-                "release-lock"
-            ],
+            [],
             [],
             []
         ],
@@ -152,9 +150,7 @@
         "type": "exec",
         "useSpawn": "false",
         "wires": [
-            [
-                "release-lock"
-            ],
+            [],
             [],
             []
         ],

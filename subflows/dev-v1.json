@@ -159,9 +159,7 @@
         "type": "exec",
         "useSpawn": "false",
         "wires": [
-            [
-                "prep-sweep"
-            ],
+            [],
             [],
             []
         ],
