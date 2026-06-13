@@ -1,0 +1,152 @@
+[
+    {
+        "id": "subflow:sweep",
+        "in": [
+            {
+                "wires": [
+                    {
+                        "id": "prep-sweep"
+                    }
+                ],
+                "x": 40,
+                "y": 80
+            }
+        ],
+        "meta": {
+            "version": "1.0.0"
+        },
+        "name": "Sweep Agent Subflow",
+        "out": [],
+        "type": "subflow"
+    },
+    {
+        "finalize": "",
+        "func": "msg.payload = 'agent ' + msg.adapter + ' \u003c cmd/build/templates/sweep.md';\nreturn msg;",
+        "id": "prep-sweep",
+        "initialize": "",
+        "libs": [],
+        "name": "Prep Sweep",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
+        "wires": [
+            [
+                "run-sweep"
+            ]
+        ],
+        "x": 350,
+        "y": 580,
+        "z": "subflow:sweep"
+    },
+    {
+        "addpay": true,
+        "append": "",
+        "command": "",
+        "id": "run-sweep",
+        "name": "Execute Sweep",
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
+        "wires": [
+            [
+                "git-commit"
+            ],
+            [],
+            []
+        ],
+        "x": 530,
+        "y": 580,
+        "z": "subflow:sweep"
+    },
+    {
+        "addpay": false,
+        "append": "",
+        "command": "git add . \u0026\u0026 git status --porcelain",
+        "id": "git-commit",
+        "name": "Git Status",
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
+        "wires": [
+            [
+                "eval-commit"
+            ],
+            [],
+            []
+        ],
+        "x": 710,
+        "y": 580,
+        "z": "subflow:sweep"
+    },
+    {
+        "finalize": "",
+        "func": "var stdout = (msg.payload || '').trim();\nif (stdout !== '') {\n    var roleName = 'Unknown';\n    if (msg.assigneeID === 2) roleName = 'Dev';\n    else if (msg.assigneeID === 3) roleName = 'Tester';\n    else if (msg.assigneeID === 4) roleName = 'Boss';\n    else if (msg.assigneeID === 5) roleName = 'Lead';\n    \n    var commitMsg = 'build: updates for task ' + msg.task.id + ' by ' + roleName;\n    msg.payload = 'git commit -m \"' + commitMsg + '\"';\n    msg.has_changes = true;\n} else {\n    msg.has_changes = false;\n}\nreturn msg;",
+        "id": "eval-commit",
+        "initialize": "",
+        "libs": [],
+        "name": "Check Git changes",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
+        "wires": [
+            [
+                "git-commit-switch"
+            ]
+        ],
+        "x": 160,
+        "y": 680,
+        "z": "subflow:sweep"
+    },
+    {
+        "checkall": "true",
+        "id": "git-commit-switch",
+        "name": "Commit?",
+        "outputs": 2,
+        "property": "has_changes",
+        "propertyType": "msg",
+        "repair": false,
+        "rules": [
+            {
+                "t": "true"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "type": "switch",
+        "wires": [
+            [
+                "git-commit-exec"
+            ],
+            [
+                "post-session-routing"
+            ]
+        ],
+        "x": 120,
+        "y": 380,
+        "z": "subflow:sweep"
+    },
+    {
+        "addpay": true,
+        "append": "",
+        "command": "",
+        "id": "git-commit-exec",
+        "name": "Git Commit",
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
+        "wires": [
+            [
+                "post-session-routing"
+            ],
+            [],
+            []
+        ],
+        "x": 370,
+        "y": 680,
+        "z": "subflow:sweep"
+    }
+]

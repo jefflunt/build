@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jefflunt/build/internal/db"
+	"github.com/jefflunt/build/internal/syncflow"
 )
 
 
@@ -325,11 +326,11 @@ func TestRunCLI_DeployFlow_Success(t *testing.T) {
 	os.Chdir(tempWorkspace)
 	defer os.Chdir(origWd)
 
-	// Create workflows directory
-	if err := os.MkdirAll("workflows", 0755); err != nil {
+	// Create flows directory
+	if err := os.MkdirAll("flows", 0755); err != nil {
 		t.Fatal(err)
 	}
-	flowFile := filepath.Join("workflows", "sdlc-orchestrator.json")
+	flowFile := filepath.Join("flows", "sdlc-orchestrator-v1.json")
 	flowData := []byte(`[{"id":"node1","type":"tab"}]`)
 	if err := os.WriteFile(flowFile, flowData, 0644); err != nil {
 		t.Fatal(err)
@@ -403,10 +404,25 @@ func TestRunCLI_SyncFlows_AlreadyInSync(t *testing.T) {
 	os.Chdir(tempWorkspace)
 	defer os.Chdir(origWd)
 
-	os.MkdirAll("workflows", 0755)
-	localFlowsFile := filepath.Join("workflows", "sdlc-orchestrator.json")
-	os.WriteFile(localFlowsFile, []byte(`[{"id":"node1","type":"tab"}]`), 0644)
+	os.MkdirAll("flows", 0755)
+	localFlowsFile := filepath.Join("flows", "sdlc-orchestrator-v1.json")
+	localContent := []byte(`[{"id":"node1","type":"tab"}]`)
+	os.WriteFile(localFlowsFile, localContent, 0644)
 	os.MkdirAll(".build", 0755)
+
+	hash, _ := syncflow.Hash(localContent)
+	stateData := []byte(`{
+		"last_sync_time": "2026-06-13T12:00:00Z",
+		"files": {
+			"flows/sdlc-orchestrator-v1.json": {
+				"node_red_id": "node1",
+				"type": "tab",
+				"last_known_hash": "` + hash + `",
+				"last_known_mtime": "2026-06-13T12:00:00Z"
+			}
+		}
+	}`)
+	os.WriteFile(".build/sync_state.json", stateData, 0644)
 
 	// 4. Run sync
 	syncFlows()
@@ -457,7 +473,7 @@ func TestRunCLI_SyncFlows_LocalNewer(t *testing.T) {
 	os.WriteFile(remoteFlowsFile, []byte(`[{"id":"old-remote-node","type":"tab"}]`), 0644)
 
 	configFile := filepath.Join(buildDir, "config.yml")
-	configData := []byte("agent_adapter: agent:live_opencode\nnode_red_url: " + ts.URL + "\nnode_red_flows_path: " + remoteFlowsFile)
+	configData := []byte("agent_adapter: agent:live_opencode\nnode_red_url: " + ts.URL + "\nnode_red_flows_path: /nonexistent/flows.json")
 	os.WriteFile(configFile, configData, 0644)
 
 	// 3. Setup workspace
@@ -471,10 +487,24 @@ func TestRunCLI_SyncFlows_LocalNewer(t *testing.T) {
 	os.Chdir(tempWorkspace)
 	defer os.Chdir(origWd)
 
-	os.MkdirAll("workflows", 0755)
-	localFlowsFile := filepath.Join("workflows", "sdlc-orchestrator.json")
+	os.MkdirAll("flows", 0755)
+	localFlowsFile := filepath.Join("flows", "sdlc-orchestrator-v1.json")
 	os.WriteFile(localFlowsFile, []byte(`[{"id":"new-local-node","type":"tab"}]`), 0644)
 	os.MkdirAll(".build", 0755)
+
+	oldHash, _ := syncflow.Hash([]byte(`[{"id":"old-remote-node","type":"tab"}]`))
+	stateData := []byte(`{
+		"last_sync_time": "2026-06-13T12:00:00Z",
+		"files": {
+			"flows/sdlc-orchestrator-v1.json": {
+				"node_red_id": "old-remote-node",
+				"type": "tab",
+				"last_known_hash": "` + oldHash + `",
+				"last_known_mtime": "2026-06-13T12:00:00Z"
+			}
+		}
+	}`)
+	os.WriteFile(".build/sync_state.json", stateData, 0644)
 
 	// Set local file to be modified in the future (newer than remote)
 	future := time.Now().Add(1 * time.Hour)
@@ -546,10 +576,25 @@ func TestRunCLI_SyncFlows_RemoteNewer(t *testing.T) {
 	os.Chdir(tempWorkspace)
 	defer os.Chdir(origWd)
 
-	os.MkdirAll("workflows", 0755)
-	localFlowsFile := filepath.Join("workflows", "sdlc-orchestrator.json")
-	os.WriteFile(localFlowsFile, []byte(`[{"id":"old-local-node","type":"tab"}]`), 0644)
+	os.MkdirAll("flows", 0755)
+	localFlowsFile := filepath.Join("flows", "sdlc-orchestrator-v1.json")
+	localContent := []byte(`[{"id":"old-local-node","type":"tab"}]`)
+	os.WriteFile(localFlowsFile, localContent, 0644)
 	os.MkdirAll(".build", 0755)
+
+	oldHash, _ := syncflow.Hash(localContent)
+	stateData := []byte(`{
+		"last_sync_time": "2026-06-13T12:00:00Z",
+		"files": {
+			"flows/sdlc-orchestrator-v1.json": {
+				"node_red_id": "newer-remote-node",
+				"type": "tab",
+				"last_known_hash": "` + oldHash + `",
+				"last_known_mtime": "2026-06-13T12:00:00Z"
+			}
+		}
+	}`)
+	os.WriteFile(".build/sync_state.json", stateData, 0644)
 
 	// Set remote file to be modified in the future (newer than local)
 	future := time.Now().Add(1 * time.Hour)
@@ -629,11 +674,25 @@ func TestRunCLI_SyncFlows_SemanticInvariance(t *testing.T) {
 	os.Chdir(tempWorkspace)
 	defer os.Chdir(origWd)
 
-	os.MkdirAll("workflows", 0755)
-	localFlowsFile := filepath.Join("workflows", "sdlc-orchestrator.json")
-	// Write with different key order, spacing, and minification
-	os.WriteFile(localFlowsFile, []byte(`[ { "disabled": false, "id": "node1", "type": "tab" } ]`), 0644)
+	os.MkdirAll("flows", 0755)
+	localFlowsFile := filepath.Join("flows", "sdlc-orchestrator-v1.json")
+	localContent := []byte(`[ { "disabled": false, "id": "node1", "type": "tab" } ]`)
+	os.WriteFile(localFlowsFile, localContent, 0644)
 	os.MkdirAll(".build", 0755)
+
+	hash, _ := syncflow.Hash(localContent)
+	stateData := []byte(`{
+		"last_sync_time": "2026-06-13T12:00:00Z",
+		"files": {
+			"flows/sdlc-orchestrator-v1.json": {
+				"node_red_id": "node1",
+				"type": "tab",
+				"last_known_hash": "` + hash + `",
+				"last_known_mtime": "2026-06-13T12:00:00Z"
+			}
+		}
+	}`)
+	os.WriteFile(".build/sync_state.json", stateData, 0644)
 
 	// Make local mod time newer than remote, which would normally trigger sync
 	future := time.Now().Add(1 * time.Hour)
@@ -648,6 +707,123 @@ func TestRunCLI_SyncFlows_SemanticInvariance(t *testing.T) {
 	// 5. Verify no POST was called because the contents are semantically identical!
 	if postCalled {
 		t.Error("expected NO POST /flows to be called because files are semantically identical")
+	}
+}
+
+func TestRunCLI_SyncFlows_DeletionsAndAdditions(t *testing.T) {
+	// 1. Mock Node-RED server
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/flows" {
+			w.WriteHeader(http.StatusOK)
+			// Return a single flow tab
+			w.Write([]byte(`[{"type":"tab","id":"node1"}]`))
+			return
+		}
+		if r.Method == "POST" && r.URL.Path == "/flows" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}))
+	defer ts.Close()
+
+	// 2. Setup config
+	tempHome, err := os.MkdirTemp("", "sync-deletions-home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempHome)
+
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempHome)
+	defer os.Setenv("HOME", origHome)
+
+	buildDir := filepath.Join(tempHome, ".build")
+	os.MkdirAll(buildDir, 0755)
+
+	configFile := filepath.Join(buildDir, "config.yml")
+	configData := []byte("agent_adapter: agent:live_opencode\nnode_red_url: " + ts.URL + "\nnode_red_flows_path: /nonexistent/flows.json")
+	os.WriteFile(configFile, configData, 0644)
+
+	// 3. Setup workspace
+	tempWorkspace, err := os.MkdirTemp("", "sync-deletions-workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempWorkspace)
+
+	origWd, _ := os.Getwd()
+	os.Chdir(tempWorkspace)
+	defer os.Chdir(origWd)
+
+	// Create tracked flow
+	os.MkdirAll("flows", 0755)
+	localFlowsFile := filepath.Join("flows", "sdlc-orchestrator-v1.json")
+	localContent := []byte(`[{"id":"node1","type":"tab"}]`)
+	os.WriteFile(localFlowsFile, localContent, 0644)
+
+	// Create untracked local addition file
+	os.MkdirAll("subflows", 0755)
+	additionFile := filepath.Join("subflows", "dev-v1.json")
+	additionContent := []byte(`[{"id":"subflow:dev","type":"subflow","name":"Dev Agent"}]`)
+	os.WriteFile(additionFile, additionContent, 0644)
+
+	os.MkdirAll(".build", 0755)
+	hash, _ := syncflow.Hash(localContent)
+
+	// Set sync state to track ONLY sdlc-orchestrator-v1.json
+	stateData := []byte(`{
+		"last_sync_time": "2026-06-13T12:00:00Z",
+		"files": {
+			"flows/sdlc-orchestrator-v1.json": {
+				"node_red_id": "node1",
+				"type": "tab",
+				"last_known_hash": "` + hash + `",
+				"last_known_mtime": "2026-06-13T12:00:00Z"
+			}
+		}
+	}`)
+	os.WriteFile(".build/sync_state.json", stateData, 0644)
+
+	// 4. Run sync (This should detect the Local Addition)
+	syncFlows()
+
+	// Verify local addition is tracked
+	state, err := syncflow.LoadSyncState(".build/sync_state.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := state.Files["subflows/dev-v1.json"]; !ok {
+		t.Error("expected subflows/dev-v1.json to be added to sync_state")
+	}
+
+	// 5. Run sync for Local Deletion (Delete the local addition from disk, leaving it tracked)
+	os.Remove(additionFile)
+	syncFlows()
+
+	// Verify local deletion was removed from sync state
+	state, _ = syncflow.LoadSyncState(".build/sync_state.json")
+	if _, ok := state.Files["subflows/dev-v1.json"]; ok {
+		t.Error("expected subflows/dev-v1.json to be removed from sync_state after deletion")
+	}
+
+	// 6. Run sync for Remote Deletion
+	// Track dev-v1.json in state and keep it on disk, but the remote mocks returned nodes (only node1) does not contain subflow:dev
+	os.WriteFile(additionFile, additionContent, 0644)
+	addHash, _ := syncflow.Hash(additionContent)
+	state.Files["subflows/dev-v1.json"] = syncflow.FileSyncState{
+		NodeRedID:      "subflow:dev",
+		Type:           "subflow",
+		LastKnownHash:  addHash,
+		LastKnownMtime: "2026-06-13T12:00:00Z",
+	}
+	syncflow.SaveSyncState(".build/sync_state.json", state)
+
+	syncFlows()
+
+	// Verify remote deletion deleted the local file on disk
+	if _, err := os.Stat(additionFile); !os.IsNotExist(err) {
+		t.Error("expected subflows/dev-v1.json to be deleted locally on remote deletion")
 	}
 }
 

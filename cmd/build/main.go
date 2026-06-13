@@ -186,7 +186,7 @@ func runCLI(args []string) {
 		}
 		runRM(target)
 	case "deploy-flow":
-		flowPath := "workflows/sdlc-orchestrator.json"
+		flowPath := "flows/sdlc-orchestrator-v1.json"
 		if len(args) >= 3 {
 			flowPath = args[2]
 		}
@@ -701,7 +701,6 @@ func runRM(target string) {
 		os.Exit(1)
 	}
 }
-
 func deployFlow(flowPath string) {
 	// 1. Load config
 	cfg, err := config.Load()
@@ -710,11 +709,37 @@ func deployFlow(flowPath string) {
 		os.Exit(1)
 	}
 
-	// 2. Read flow file
-	flowData, err := os.ReadFile(flowPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: flow file %s could not be read: %v\n", flowPath, err)
-		os.Exit(1)
+	var flowData []byte
+	if flowPath == "flows/sdlc-orchestrator-v1.json" {
+		// Scan flows/*.json and subflows/*.json to merge them
+		var merged []interface{}
+		flows, _ := filepath.Glob("flows/*.json")
+		subflows, _ := filepath.Glob("subflows/*.json")
+		allFiles := append(flows, subflows...)
+
+		for _, f := range allFiles {
+			content, err := os.ReadFile(f)
+			if err != nil {
+				continue
+			}
+			var nodes []interface{}
+			if err := json.Unmarshal(content, &nodes); err == nil {
+				merged = append(merged, nodes...)
+			}
+		}
+
+		if len(merged) > 0 {
+			flowData, _ = json.Marshal(merged)
+		} else {
+			flowData, _ = os.ReadFile(flowPath)
+		}
+	} else {
+		var err error
+		flowData, err = os.ReadFile(flowPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: flow file %s could not be read: %v\n", flowPath, err)
+			os.Exit(1)
+		}
 	}
 
 	// 3. Prepare POST request to Node-RED Admin API
@@ -753,7 +778,6 @@ func syncFlows() {
 	}
 
 	// 2. Resolve Node-RED flows path on disk
-	localPath := "workflows/sdlc-orchestrator.json"
 	var flowsPath string
 	if cfg.NodeRedFlowsPath != "" {
 		flowsPath = cfg.NodeRedFlowsPath
@@ -771,14 +795,12 @@ func syncFlows() {
 		}
 	}
 
-	// 3. Load local flows (or default to empty if not found)
-	localBytes, err := os.ReadFile(localPath)
-	if err != nil && !os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Failed to read local flows file %s: %v\n", localPath, err)
+	// 3. Load Sync State Tracker
+	statePath := ".build/sync_state.json"
+	state, err := syncflow.LoadSyncState(statePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load sync state tracker: %v\n", err)
 		os.Exit(1)
-	}
-	if len(localBytes) == 0 {
-		localBytes = []byte("[]")
 	}
 
 	// 4. Fetch remote flows via GET /flows
@@ -802,30 +824,94 @@ func syncFlows() {
 	buf.ReadFrom(resp.Body)
 	remoteBytes := buf.Bytes()
 
-	// 5. Semantic Normalization & Comparison
-	normLocal, err := syncflow.Normalize(localBytes)
+	var remoteNodes []interface{}
+	if err := json.Unmarshal(remoteBytes, &remoteNodes); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to parse remote flows JSON: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 5. Partition remote nodes
+	partitions, err := syncflow.PartitionNodes(remoteNodes)
 	if err != nil {
-		normLocal = []byte("[]")
-	}
-	normRemote, err := syncflow.Normalize(remoteBytes)
-	if err != nil {
-		normRemote = []byte("[]")
+		fmt.Fprintf(os.Stderr, "Failed to partition remote nodes: %v\n", err)
+		os.Exit(1)
 	}
 
-	hashLocal, _ := syncflow.Hash(normLocal)
-	hashRemote, _ := syncflow.Hash(normRemote)
-
-	if hashLocal == hashRemote {
-		fmt.Println("Workflows are already semantically in sync.")
-		return
+	// Map of remote partitions by NodeRedID
+	remotePartMap := make(map[string]syncflow.Partition)
+	for _, p := range partitions {
+		remotePartMap[p.ID] = p
 	}
 
-	// 6. Hashes differ. Compare file modification times to determine who wins
-	var localModTime time.Time
-	if localInfo, statErr := os.Stat(localPath); statErr == nil {
-		localModTime = localInfo.ModTime()
+	// Get list of local JSON files currently in flows/ and subflows/
+	localFiles := make(map[string]bool)
+	flowsGlob, _ := filepath.Glob("flows/*.json")
+	subflowsGlob, _ := filepath.Glob("subflows/*.json")
+	for _, f := range append(flowsGlob, subflowsGlob...) {
+		localFiles[f] = true
 	}
 
+	// Track change flags
+	localChanged := false
+	remoteChanged := false
+
+	// Step A: Detect Local Additions
+	for path := range localFiles {
+		if _, ok := state.Files[path]; !ok {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				continue
+			}
+			hash, _ := syncflow.Hash(content)
+			info, _ := os.Stat(path)
+
+			var nodes []map[string]interface{}
+			nodeRedID := "unknown"
+			typ := "unknown"
+			if json.Unmarshal(content, &nodes) == nil && len(nodes) > 0 {
+				for _, node := range nodes {
+					t, _ := node["type"].(string)
+					id, _ := node["id"].(string)
+					if t == "tab" || t == "subflow" {
+						nodeRedID = id
+						typ = t
+						break
+					}
+				}
+			}
+
+			state.Files[path] = syncflow.FileSyncState{
+				NodeRedID:      nodeRedID,
+				Type:           typ,
+				LastKnownHash:  hash,
+				LastKnownMtime: info.ModTime().Format(time.RFC3339),
+			}
+			localChanged = true
+			remoteChanged = true
+			fmt.Printf("Detected local addition: %s\n", path)
+
+			var parsedNodes []interface{}
+			if json.Unmarshal(content, &parsedNodes) == nil {
+				remotePartMap[nodeRedID] = syncflow.Partition{
+					ID:    nodeRedID,
+					Type:  typ,
+					Nodes: parsedNodes,
+				}
+			}
+		}
+	}
+
+	// Step B: Detect Local Deletions
+	for path, fState := range state.Files {
+		if !localFiles[path] {
+			fmt.Printf("Detected local deletion: %s. Removing from Node-RED...\n", path)
+			delete(remotePartMap, fState.NodeRedID)
+			delete(state.Files, path)
+			remoteChanged = true
+		}
+	}
+
+	// Step C: Detect Remote Additions & Remote Deletions
 	var remoteModTime time.Time
 	if flowsPath != "" {
 		if remoteInfo, statErr := os.Stat(flowsPath); statErr == nil {
@@ -833,22 +919,179 @@ func syncFlows() {
 		}
 	}
 
-	if localModTime.After(remoteModTime) {
-		// Local file is newer -> Deploy to Node-RED
-		fmt.Printf("Local workflow is newer than Node-RED flow (Local: %s, Remote: %s). Deploying local to Node-RED...\n", localModTime.Format(time.RFC3339), remoteModTime.Format(time.RFC3339))
-		deployFlow(localPath)
-	} else {
-		// Node-RED is newer -> Save back to local
-		fmt.Printf("Node-RED flow is newer than local workflow (Remote: %s, Local: %s). Serializing Node-RED flow to %s...\n", remoteModTime.Format(time.RFC3339), localModTime.Format(time.RFC3339), localPath)
+	for path, fState := range state.Files {
+		if _, existsOnRemote := remotePartMap[fState.NodeRedID]; !existsOnRemote {
+			hasFlowsFile := false
+			if flowsPath != "" {
+				if _, statErr := os.Stat(flowsPath); statErr == nil {
+					hasFlowsFile = true
+				}
+			}
 
-		// Create workflows/ folder if missing
-		os.MkdirAll(filepath.Dir(localPath), 0755)
-
-		err = os.WriteFile(localPath, normRemote, 0644)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to write local workflow file: %v\n", err)
-			os.Exit(1)
+			if !hasFlowsFile || remoteModTime.After(time.Now().Add(-5 * time.Second)) {
+				fmt.Printf("Detected remote deletion of %s in Node-RED. Deleting local file...\n", path)
+				os.Remove(path)
+				delete(state.Files, path)
+				localChanged = true
+			}
 		}
-		fmt.Printf("Successfully synchronized Node-RED flow to %s\n", localPath)
+	}
+
+	for id, part := range remotePartMap {
+		tracked := false
+		for _, fState := range state.Files {
+			if fState.NodeRedID == id {
+				tracked = true
+				break
+			}
+		}
+
+		if !tracked {
+			slugName := strings.ToLower(part.Name)
+			slugName = strings.ReplaceAll(slugName, " ", "-")
+			slugName = strings.ReplaceAll(slugName, "_", "-")
+			if slugName == "" {
+				slugName = part.ID
+			}
+
+			var path string
+			if part.Type == "tab" {
+				path = filepath.Join("flows", slugName+"-v1.json")
+			} else if part.Type == "subflow" {
+				path = filepath.Join("subflows", slugName+"-v1.json")
+			} else {
+				path = filepath.Join("flows", "global-configs.json")
+			}
+
+			partBytes, _ := json.MarshalIndent(part.Nodes, "", "    ")
+			normBytes, _ := syncflow.Normalize(partBytes)
+			os.MkdirAll(filepath.Dir(path), 0755)
+			_ = os.WriteFile(path, normBytes, 0644)
+
+			info, _ := os.Stat(path)
+			hash, _ := syncflow.Hash(normBytes)
+
+			state.Files[path] = syncflow.FileSyncState{
+				NodeRedID:      id,
+				Type:           part.Type,
+				LastKnownHash:  hash,
+				LastKnownMtime: info.ModTime().Format(time.RFC3339),
+			}
+			localChanged = true
+			fmt.Printf("Detected remote addition in Node-RED: %s. Created local file %s.\n", part.Name, path)
+		}
+	}
+
+	// Step D: Detect Modifications
+	for path, fState := range state.Files {
+		part, hasRemote := remotePartMap[fState.NodeRedID]
+		if !hasRemote {
+			continue
+		}
+
+		localBytes, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		localHash, _ := syncflow.Hash(localBytes)
+
+		remotePartBytes, _ := json.MarshalIndent(part.Nodes, "", "    ")
+		remoteHash, _ := syncflow.Hash(remotePartBytes)
+
+		localModified := localHash != fState.LastKnownHash
+		remoteModified := remoteHash != fState.LastKnownHash
+
+		if !localModified && !remoteModified {
+			continue
+		}
+
+		resolveLocal := localModified
+		if localModified && remoteModified {
+			localInfo, _ := os.Stat(path)
+			if localInfo.ModTime().After(remoteModTime) {
+				resolveLocal = true
+			} else {
+				resolveLocal = false
+			}
+		}
+
+		if resolveLocal {
+			fmt.Printf("Detected local modification in %s. Deploying to Node-RED...\n", path)
+			var nodes []interface{}
+			_ = json.Unmarshal(localBytes, &nodes)
+			part.Nodes = nodes
+			remotePartMap[fState.NodeRedID] = part
+
+			localInfo, _ := os.Stat(path)
+			fState.LastKnownHash = localHash
+			fState.LastKnownMtime = localInfo.ModTime().Format(time.RFC3339)
+			state.Files[path] = fState
+			remoteChanged = true
+		} else {
+			fmt.Printf("Detected remote modification in Node-RED flow for %s. Updating local file...\n", path)
+			normBytes, _ := syncflow.Normalize(remotePartBytes)
+			_ = os.WriteFile(path, normBytes, 0644)
+
+			localInfo, _ := os.Stat(path)
+			fState.LastKnownHash = remoteHash
+			fState.LastKnownMtime = localInfo.ModTime().Format(time.RFC3339)
+			state.Files[path] = fState
+			localChanged = true
+		}
+	}
+
+	// Step E: Apply Changes and Save State
+	if !localChanged && !remoteChanged {
+		fmt.Println("Workflows are already semantically in sync.")
+		return
+	}
+
+	state.LastSyncTime = time.Now().Format(time.RFC3339)
+	_ = syncflow.SaveSyncState(statePath, state)
+
+	if remoteChanged {
+		var finalNodes []interface{}
+		for _, part := range remotePartMap {
+			finalNodes = append(finalNodes, part.Nodes...)
+		}
+
+		finalBytes, _ := json.Marshal(finalNodes)
+		if flowsPath != "" {
+			if _, statErr := os.Stat(flowsPath); statErr == nil {
+				_ = os.WriteFile(flowsPath, finalBytes, 0644)
+				fmt.Println("Successfully deployed merged workflows to local Node-RED storage.")
+			} else {
+				deployFlowData(finalBytes, cfg.NodeRedURL)
+			}
+		} else {
+			deployFlowData(finalBytes, cfg.NodeRedURL)
+		}
+	}
+
+	fmt.Println("Bidirectional synchronization completed successfully.")
+}
+
+func deployFlowData(flowData []byte, nodeRedURL string) {
+	url := strings.TrimSuffix(nodeRedURL, "/") + "/flows"
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(flowData))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating HTTP request: %v\n", err)
+		os.Exit(1)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to connect to Node-RED server at %s: %v\n", url, err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(resp.Body)
+		fmt.Fprintf(os.Stderr, "Node-RED server returned error status %s: %s\n", resp.Status, buf.String())
+		os.Exit(1)
 	}
 }

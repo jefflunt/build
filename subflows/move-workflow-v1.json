@@ -1,0 +1,187 @@
+[
+    {
+        "id": "subflow:move-workflow",
+        "in": [],
+        "meta": {
+            "version": "1.0.0"
+        },
+        "name": "Move Workflow Subflow",
+        "out": [],
+        "type": "subflow"
+    },
+    {
+        "checkall": "true",
+        "id": "db-assign-check",
+        "name": "DB Assign?",
+        "outputs": 2,
+        "property": "needs_db_assignment",
+        "propertyType": "msg",
+        "repair": false,
+        "rules": [
+            {
+                "t": "true"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "type": "switch",
+        "wires": [
+            [
+                "prep-db-assignment"
+            ],
+            [
+                "prep-comments-query"
+            ]
+        ],
+        "x": 610,
+        "y": 380,
+        "z": "subflow:move-workflow"
+    },
+    {
+        "finalize": "",
+        "func": "msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\nreturn msg;",
+        "id": "prep-db-assignment",
+        "initialize": "",
+        "libs": [],
+        "name": "Prep DB Assignment",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
+        "wires": [
+            [
+                "update-db-dev-assignment"
+            ]
+        ],
+        "x": 880,
+        "y": 580,
+        "z": "subflow:move-workflow"
+    },
+    {
+        "addpay": true,
+        "append": "",
+        "command": "",
+        "id": "update-db-dev-assignment",
+        "name": "DB Dev Assignment",
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
+        "wires": [
+            [
+                "prep-comments-query"
+            ],
+            [],
+            []
+        ],
+        "x": 1060,
+        "y": 580,
+        "z": "subflow:move-workflow"
+    },
+    {
+        "checkall": "true",
+        "id": "post-session-routing",
+        "name": "Route Post-Session",
+        "outputs": 4,
+        "property": "assigneeID",
+        "propertyType": "msg",
+        "repair": false,
+        "rules": [
+            {
+                "t": "eq",
+                "v": "2",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "3",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "4",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "5",
+                "vt": "num"
+            }
+        ],
+        "type": "switch",
+        "wires": [
+            [
+                "prep-dev-transition"
+            ],
+            [
+                "run-tester-suite"
+            ],
+            [
+                "prep-boss-last-comment"
+            ],
+            [
+                "prep-lead-transition"
+            ]
+        ],
+        "x": 400,
+        "y": 380,
+        "z": "subflow:move-workflow"
+    },
+    {
+        "finalize": "",
+        "func": "msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 3 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_tester', '\" + msg.adapter + \"', '', 'build');\\\"\";\nreturn msg;",
+        "id": "prep-dev-transition",
+        "initialize": "",
+        "libs": [],
+        "name": "Prep Dev Transition",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
+        "wires": [
+            [
+                "post-dev-transition"
+            ]
+        ],
+        "x": 620,
+        "y": 680,
+        "z": "subflow:move-workflow"
+    },
+    {
+        "addpay": true,
+        "append": "",
+        "command": "",
+        "id": "post-dev-transition",
+        "name": "Handoff to Tester",
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
+        "wires": [
+            [
+                "release-lock"
+            ],
+            [],
+            []
+        ],
+        "x": 840,
+        "y": 680,
+        "z": "subflow:move-workflow"
+    },
+    {
+        "finalize": "",
+        "func": "flow.set('is_processing', false);\nnode.status({ fill: 'green', shape: 'ring', text: 'Lock released / Idle' });\nreturn msg;",
+        "id": "release-lock",
+        "initialize": "",
+        "libs": [],
+        "name": "Release Lock",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
+        "wires": [
+            []
+        ],
+        "x": 1280,
+        "y": 620,
+        "z": "subflow:move-workflow"
+    }
+]

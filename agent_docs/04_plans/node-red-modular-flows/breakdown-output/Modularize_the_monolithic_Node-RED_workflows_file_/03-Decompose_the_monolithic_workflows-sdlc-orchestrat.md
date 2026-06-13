@@ -1,0 +1,7 @@
+# Decompose the monolithic workflows/sdlc-orchestrator.json file by extracting its components into a high-level orchestrator flow file under flows/ and seven modular agent/step subflow files under subflows/, adhering to the <name>-<version>.json pattern. Seed the initial tracking state in .build/sync_state.json to enable robust bidirectional sync tracking.
+
+This task involves refactoring the Node-RED workflow storage architecture from a single monolithic file into a modular structure stored in sibling directories flows/ and subflows/. The monolithic workflows/sdlc-orchestrator.json file will be split into a high-level orchestrator (flows/sdlc-orchestrator-v1.json) and seven native subflows: dev-v1.json, tester-v1.json, boss-v1.json, sweep-v1.json, lead-dev-v1.json, query-work-v1.json, and move-workflow-v1.json under subflows/.
+
+Each extracted file will contain a JSON array of nodes that belong to that specific tab or subflow definition, conforming to the <name>-<version>.json naming convention. The workflows/ directory itself will be removed as part of this restructuring.
+
+Additionally, this task seeds the initial .build/sync_state.json file, which tracks metadata such as node_red_id, type, last_known_hash, and last_known_mtime for each of the new modular files. This state is required by the synchronization engine to safely perform bidirectional merges and partitions without loops.

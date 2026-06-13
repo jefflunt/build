@@ -1,0 +1,102 @@
+[
+    {
+        "id": "subflow:lead-dev",
+        "in": [
+            {
+                "wires": [
+                    {
+                        "id": "prep-lead-transition"
+                    }
+                ],
+                "x": 40,
+                "y": 80
+            }
+        ],
+        "meta": {
+            "version": "1.0.0"
+        },
+        "name": "Lead Dev Agent Subflow",
+        "out": [],
+        "type": "subflow"
+    },
+    {
+        "finalize": "",
+        "func": "msg.payload = \"sqlite3 -json .build/build.db \\\"SELECT COUNT(*) as count FROM comments WHERE task_id = '\" + msg.task.id + \"' AND agent_id = 5\\\"\";\nreturn msg;",
+        "id": "prep-lead-transition",
+        "initialize": "",
+        "libs": [],
+        "name": "Prep Lead Transition",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
+        "wires": [
+            [
+                "lead-comment-check"
+            ]
+        ],
+        "x": 160,
+        "y": 1040,
+        "z": "subflow:lead-dev"
+    },
+    {
+        "addpay": true,
+        "append": "",
+        "command": "",
+        "id": "lead-comment-check",
+        "name": "Lead Comment Check",
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
+        "wires": [
+            [
+                "eval-lead-comment"
+            ],
+            [],
+            []
+        ],
+        "x": 360,
+        "y": 1040,
+        "z": "subflow:lead-dev"
+    },
+    {
+        "finalize": "",
+        "func": "var stdout = (msg.payload || '').trim();\nvar count = 0;\ntry {\n    var res = JSON.parse(stdout);\n    count = res[0].count;\n} catch (e) {\n    node.error('Error parsing lead comment check: ' + e.message);\n}\n\nvar sql = '';\nif (count === 0) {\n    var note = 'System Note: The Lead Engineer reviewed the task but failed to leave explicit instructions. Developer, please carefully review the previous failures and try again.';\n    sql += \"sqlite3 .build/build.db \\\"INSERT INTO comments (task_id, agent_id, content) VALUES ('\" + msg.task.id + \"', 1, '\" + note + \"'); UPDATE tasks SET status = 'todo', agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\n} else {\n    sql += \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'todo', agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\n}\nmsg.payload = sql;\nreturn msg;",
+        "id": "eval-lead-comment",
+        "initialize": "",
+        "libs": [],
+        "name": "Eval Lead Comment",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
+        "wires": [
+            [
+                "post-lead-transition"
+            ]
+        ],
+        "x": 560,
+        "y": 1040,
+        "z": "subflow:lead-dev"
+    },
+    {
+        "addpay": true,
+        "append": "",
+        "command": "",
+        "id": "post-lead-transition",
+        "name": "Lead Transition Exec",
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
+        "wires": [
+            [
+                "release-lock"
+            ],
+            [],
+            []
+        ],
+        "x": 760,
+        "y": 1040,
+        "z": "subflow:lead-dev"
+    }
+]

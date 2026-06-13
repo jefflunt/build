@@ -1,0 +1,172 @@
+[
+    {
+        "id": "subflow:dev",
+        "in": [
+            {
+                "wires": [
+                    {
+                        "id": "prep-comments-query"
+                    }
+                ],
+                "x": 40,
+                "y": 80
+            }
+        ],
+        "meta": {
+            "version": "1.0.0"
+        },
+        "name": "Dev Agent Subflow",
+        "out": [
+            {
+                "wires": [
+                    {
+                        "id": "run-agent",
+                        "port": 0
+                    }
+                ],
+                "x": 840,
+                "y": 80
+            }
+        ],
+        "type": "subflow"
+    },
+    {
+        "finalize": "",
+        "func": "msg.payload = \"sqlite3 -json .build/build.db \\\"SELECT a.role, c.content FROM comments c JOIN agents a ON c.agent_id = a.id WHERE c.task_id = '\" + msg.task.id + \"' ORDER BY c.id ASC\\\"\";\nreturn msg;",
+        "id": "prep-comments-query",
+        "initialize": "",
+        "libs": [],
+        "name": "Prep Comments Query",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
+        "wires": [
+            [
+                "get-comments"
+            ]
+        ],
+        "x": 800,
+        "y": 380,
+        "z": "subflow:dev"
+    },
+    {
+        "addpay": true,
+        "append": "",
+        "command": "",
+        "id": "get-comments",
+        "name": "Get Comments",
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
+        "wires": [
+            [
+                "parse-comments"
+            ],
+            [],
+            []
+        ],
+        "x": 980,
+        "y": 380,
+        "z": "subflow:dev"
+    },
+    {
+        "finalize": "",
+        "func": "var stdout = (msg.payload || '').trim();\nvar comments = [];\nif (stdout !== '') {\n    try {\n        comments = JSON.parse(stdout);\n    } catch (e) {\n        node.error('Error parsing comments JSON: ' + e.message);\n    }\n}\nmsg.comments = comments;\nreturn msg;",
+        "id": "parse-comments",
+        "initialize": "",
+        "libs": [],
+        "name": "Parse Comments",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
+        "wires": [
+            [
+                "prep-template-path"
+            ]
+        ],
+        "x": 150,
+        "y": 480,
+        "z": "subflow:dev"
+    },
+    {
+        "finalize": "",
+        "func": "var role = 'dev';\nif (msg.assigneeID === 3) role = 'tester';\nelse if (msg.assigneeID === 4) role = 'boss';\nelse if (msg.assigneeID === 5) role = 'lead';\n\nmsg.template_path = 'cmd/build/templates/' + role + '.md';\nmsg.payload = 'cat ' + msg.template_path;\nreturn msg;",
+        "id": "prep-template-path",
+        "initialize": "",
+        "libs": [],
+        "name": "Prep Template File",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
+        "wires": [
+            [
+                "read-template"
+            ]
+        ],
+        "x": 350,
+        "y": 480,
+        "z": "subflow:dev"
+    },
+    {
+        "addpay": true,
+        "append": "",
+        "command": "",
+        "id": "read-template",
+        "name": "Read Template",
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
+        "wires": [
+            [
+                "format-prompt"
+            ],
+            [],
+            []
+        ],
+        "x": 550,
+        "y": 480,
+        "z": "subflow:dev"
+    },
+    {
+        "finalize": "",
+        "func": "var template = msg.payload || '';\nvar task = msg.task;\nvar comments = msg.comments || [];\n\nvar commentsHistory = '';\nif (comments.length \u003e 0) {\n    for (var i = 0; i \u003c comments.length; i++) {\n        commentsHistory += comments[i].role + ': ' + comments[i].content + '\\n----------------------------------------\\n';\n    }\n} else {\n    commentsHistory = '(No comments yet)';\n}\n\nvar contextContent = '\\n\\n---\\n### YOUR CURRENT ASSIGNMENT\\nTask ID: ' + task.id + '\\nTitle: ' + task.title + '\\nDescription: ' + (task.description || '') + '\\n\\n### COMMENTS HISTORY\\n' + commentsHistory + '\\n';\n\nmsg.agentPrompt = template + contextContent;\n\n// Write to file inside Node-RED using inline node function (since fs is available, or write command)\n// To be extremely robust, we will write the instructions file via standard echo/printf or node-red write\n// We'll construct a shell command that writes the prompt safely, or writes it using sqlite or standard CLI\n// Let's create a temporary file name:\nvar filepath = '.build/agent_' + msg.assigneeID + '.md';\nmsg.agentFile = filepath;\n\n// We will write this prompt using fs inside Node-RED if we can, or construct an exec command\n// Let's write the command to write the file, then execute the agent, then clean up!\n// We will use standard cat and EOF to write to file safely in msg.payload\nmsg.payload = 'cat \u003c\u003c \\'EOF\\' \u003e ' + filepath + '\\n' + msg.agentPrompt + '\\nEOF\\n' + 'agent ' + msg.adapter + ' \u003c ' + filepath + '; rm -f ' + filepath;\n\nreturn msg;",
+        "id": "format-prompt",
+        "initialize": "",
+        "libs": [],
+        "name": "Format Prompt",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
+        "wires": [
+            [
+                "run-agent"
+            ]
+        ],
+        "x": 750,
+        "y": 480,
+        "z": "subflow:dev"
+    },
+    {
+        "addpay": true,
+        "append": "",
+        "command": "",
+        "id": "run-agent",
+        "name": "Execute Agent",
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
+        "wires": [
+            [
+                "prep-sweep"
+            ],
+            [],
+            []
+        ],
+        "x": 160,
+        "y": 580,
+        "z": "subflow:dev"
+    }
+]

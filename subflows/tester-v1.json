@@ -1,0 +1,165 @@
+[
+    {
+        "id": "subflow:tester",
+        "in": [
+            {
+                "wires": [
+                    {
+                        "id": "run-tester-suite"
+                    }
+                ],
+                "x": 40,
+                "y": 80
+            }
+        ],
+        "meta": {
+            "version": "1.0.0"
+        },
+        "name": "Tester Agent Subflow",
+        "out": [],
+        "type": "subflow"
+    },
+    {
+        "addpay": false,
+        "append": "",
+        "command": "./.build/test",
+        "id": "run-tester-suite",
+        "name": "Run Workspace Tests",
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
+        "wires": [
+            [
+                "prep-tester-pass"
+            ],
+            [
+                "prep-tester-fail"
+            ],
+            []
+        ],
+        "x": 620,
+        "y": 740,
+        "z": "subflow:tester"
+    },
+    {
+        "finalize": "",
+        "func": "var instructionMsg = '**CRITICAL**: Please review task ' + msg.task.id + ' and provide your feedback using the `build review` command.\\n\\n' +\n    'The syntax is:\\n' +\n    'build review ' + msg.task.id + ' \u003capprove|reject\u003e \"\u003creasoning\u003e\"\\n\\n' +\n    'RULES:\\n' +\n    '1. Your reasoning MUST be a single line of text.\\n' +\n    '2. Enclose your reasoning in double quotes (\").\\n' +\n    '3. DO NOT use double quotes inside your reasoning string (use single quotes instead).\\n' +\n    '4. DO NOT ask questions; provide ONLY the final review via the bash tool.';\n\nmsg.payload = \"sqlite3 .build/build.db \\\"INSERT INTO comments (task_id, agent_id, content) VALUES ('\" + msg.task.id + \"', 1, '\" + instructionMsg.replace(/'/g, \"''\") + \"'); UPDATE tasks SET agent_id = 4 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_boss', '\" + msg.adapter + \"', '', 'build');\\\"\";\nreturn msg;",
+        "id": "prep-tester-pass",
+        "initialize": "",
+        "libs": [],
+        "name": "Prep Tester Pass",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
+        "wires": [
+            [
+                "eval-tests-pass"
+            ]
+        ],
+        "x": 830,
+        "y": 720,
+        "z": "subflow:tester"
+    },
+    {
+        "addpay": true,
+        "append": "",
+        "command": "",
+        "id": "eval-tests-pass",
+        "name": "Tester Pass Update",
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
+        "wires": [
+            [
+                "release-lock"
+            ],
+            [],
+            []
+        ],
+        "x": 1030,
+        "y": 720,
+        "z": "subflow:tester"
+    },
+    {
+        "finalize": "",
+        "func": "var errorMsg = 'Tests failed:\\n' + msg.payload;\n// Fetch current approval attempts via subquery or just perform update with attempts incremented\nmsg.payload = \"sqlite3 .build/build.db \\\"INSERT INTO comments (task_id, agent_id, content) VALUES ('\" + msg.task.id + \"', 3, '\" + errorMsg.replace(/'/g, \"''\") + \"'); UPDATE tasks SET approval_attempts = approval_attempts + 1 WHERE id = '\" + msg.task.id + \"';\\\" \u0026\u0026 \" +\n    \"sqlite3 -json .build/build.db \\\"SELECT approval_attempts, lead_interventions FROM tasks WHERE id = '\" + msg.task.id + \"'\\\"\";\nreturn msg;",
+        "id": "prep-tester-fail",
+        "initialize": "",
+        "libs": [],
+        "name": "Prep Tester Fail",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
+        "wires": [
+            [
+                "query-attempts-after-fail"
+            ]
+        ],
+        "x": 830,
+        "y": 770,
+        "z": "subflow:tester"
+    },
+    {
+        "addpay": true,
+        "append": "",
+        "command": "",
+        "id": "query-attempts-after-fail",
+        "name": "Query Attempts After Fail",
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
+        "wires": [
+            [
+                "eval-tester-escalation"
+            ],
+            [],
+            []
+        ],
+        "x": 1040,
+        "y": 770,
+        "z": "subflow:tester"
+    },
+    {
+        "finalize": "",
+        "func": "var stdout = (msg.payload || '').trim();\ntry {\n    var res = JSON.parse(stdout);\n    var attempts = res[0].approval_attempts;\n    var lead_interventions = res[0].lead_interventions;\n    \n    if (attempts \u003e= 3) {\n        if (lead_interventions \u003c 3) {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'stuck', agent_id = 5, approval_attempts = 0, lead_interventions = lead_interventions + 1 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'escalate_to_lead', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        } else {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = '\" + attempts + \"' WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_rejected', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        }\n    } else {\n        msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\n    }\n} catch (e) {\n    node.error('Error parsing attempts JSON: ' + e.message);\n    // Fallback to dev\n    msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"';\\\"\";\n}\nreturn msg;",
+        "id": "eval-tester-escalation",
+        "initialize": "",
+        "libs": [],
+        "name": "Eval Tester Escalation",
+        "noerr": 0,
+        "outputs": 1,
+        "type": "function",
+        "wires": [
+            [
+                "eval-tests-fail"
+            ]
+        ],
+        "x": 1260,
+        "y": 770,
+        "z": "subflow:tester"
+    },
+    {
+        "addpay": true,
+        "append": "",
+        "command": "",
+        "id": "eval-tests-fail",
+        "name": "Tester Fail Update",
+        "oldrc": false,
+        "timer": "",
+        "type": "exec",
+        "useSpawn": "false",
+        "wires": [
+            [
+                "release-lock"
+            ],
+            [],
+            []
+        ],
+        "x": 1460,
+        "y": 770,
+        "z": "subflow:tester"
+    }
+]
