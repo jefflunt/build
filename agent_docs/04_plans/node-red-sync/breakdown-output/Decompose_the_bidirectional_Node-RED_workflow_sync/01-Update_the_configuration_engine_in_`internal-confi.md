@@ -1,0 +1,7 @@
+# Update the configuration engine in `internal/config/config.go` to parse the optional `node_red_flows_path` field and implement dynamic path resolution. When the option is omitted, sequentially verify standard locations (`/opt/homebrew/var/node-red/flows.json` and `~/.node-red/flows.json` using absolute home directory expansion) to establish the active remote flows file path, returning a descriptive error if neither exists.
+
+This task requires updating the configuration parsing engine within `internal/config/config.go`. The existing parsing mechanism uses an line-by-line scanner to extract configuration keys. We must extend this to parse the optional `node_red_flows_path` field, cleaning it of quotes and trailing comments using existing utility functions.
+
+If the field is omitted or empty in the configuration file, the resolution logic must dynamically verify standard fallback locations to establish the active remote flows file path. These fallbacks are `/opt/homebrew/var/node-red/flows.json` and `~/.node-red/flows.json`. If using the latter, the user's home directory must be dynamically expanded using `os.UserHomeDir()` to obtain the absolute path.
+
+If neither location exists and no path is configured, the engine should return a descriptive error. This dynamic resolution forms a critical slice of the broader Node-RED workflow sync mechanism, enabling down-stream synchronization commands to compare modification times securely and accurately.

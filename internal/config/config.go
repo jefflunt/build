@@ -12,11 +12,12 @@ import (
 
 // Config represents the properties parsed from the configuration file.
 type Config struct {
-	AgentAdapter string // e.g., "opencode:anthropic/claude-3.5-sonnet"
-	CLIName      string // e.g., "opencode"
-	Provider     string // e.g., "anthropic"
-	Model        string // e.g., "claude-3.5-sonnet"
-	NodeRedURL   string // e.g., "http://localhost:1880"
+	AgentAdapter     string // e.g., "opencode:anthropic/claude-3.5-sonnet"
+	CLIName          string // e.g., "agent"
+	Provider         string // e.g., "anthropic"
+	Model            string // e.g., "claude-3.5-sonnet"
+	NodeRedURL       string // e.g., "http://localhost:1880"
+	NodeRedFlowsPath string // e.g., "/opt/homebrew/var/node-red/flows.json"
 }
 
 // ConfigSource defines the interface for loading raw configuration bytes.

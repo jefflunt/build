@@ -1,0 +1,9 @@
+# Implement the `sync-flows` CLI subcommand in `cmd/build/main.go` to provide bidirectional synchronization of Node-RED flows. The subcommand should load local and remote flows, perform an early exit via SHA256 semantic comparison, and resolve any differences by comparing file modification times to either post the newer local flow to Node-RED or save the newer remote flow locally, preventing infinite syncing loops.
+
+This task implements the `sync-flows` CLI subcommand within `cmd/build/main.go` and integrates the complete bidirectional sync logic. 
+
+First, the subcommand will retrieve configuration values from `internal/config`, obtaining `node_red_url` and attempting to resolve the `node_red_flows_path`. If `node_red_flows_path` is not explicitly configured, it will fallback to standard default file paths (/opt/homebrew/var/node-red/flows.json and ~/.node-red/flows.json) to locate the active Node-RED instance flows file.
+
+Second, the tool will load both local workflows (`workflows/sdlc-orchestrator.json`) and active flows from the remote Node-RED API (`GET /flows`). Both flows will be semantically normalized by parsing them into Go structures and re-serializing them using the standard `json` package (which automatically sorts map keys alphabetically) with 4-space indentation. SHA256 checksums of these normalized payloads will be computed and compared. If they match, the tool will exit early, preventing infinite syncing loops.
+
+Third, if the hashes differ, the engine will compare the file modification times (ModTime) of the local JSON file and the resolved remote/active flow file. If the local file is newer, it posts the normalized local JSON to Node-RED (`POST /flows`). If the active flow file is newer, it writes the normalized remote flow JSON back to `workflows/sdlc-orchestrator.json`.

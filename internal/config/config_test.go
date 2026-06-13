@@ -137,6 +137,19 @@ func TestParse(t *testing.T) {
 				Provider:     "test_opencode",
 				Model:        "",
 				NodeRedURL:   "http://localhost:1880",
+				NodeRedFlowsPath: "",
+			},
+		},
+		{
+			name: "valid with flows path",
+			yaml: "agent_adapter: agent:test_opencode\nnode_red_url: http://localhost:1880\nnode_red_flows_path: /path/to/flows.json",
+			expected: &Config{
+				AgentAdapter: "agent:test_opencode",
+				CLIName:      "agent",
+				Provider:     "test_opencode",
+				Model:        "",
+				NodeRedURL:   "http://localhost:1880",
+				NodeRedFlowsPath: "/path/to/flows.json",
 			},
 		},
 		{
@@ -145,6 +158,7 @@ func TestParse(t *testing.T) {
 # This is a comment
 agent_adapter: "agent:test_opencode" # use this adapter
 node_red_url: "http://localhost:1880"
+node_red_flows_path: "/path/to/flows.json"
 `,
 			expected: &Config{
 				AgentAdapter: "agent:test_opencode",
@@ -152,6 +166,7 @@ node_red_url: "http://localhost:1880"
 				Provider:     "test_opencode",
 				Model:        "",
 				NodeRedURL:   "http://localhost:1880",
+				NodeRedFlowsPath: "/path/to/flows.json",
 			},
 		},
 		{
