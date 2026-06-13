@@ -8,7 +8,7 @@
                         "id": "prep-lead-transition"
                     }
                 ],
-                "x": 40,
+                "x": 80,
                 "y": 80
             }
         ],
@@ -34,8 +34,8 @@
                 "lead-comment-check"
             ]
         ],
-        "x": 160,
-        "y": 1040,
+        "x": 240,
+        "y": 80,
         "z": "subflow:lead-dev"
     },
     {
@@ -55,8 +55,8 @@
             [],
             []
         ],
-        "x": 360,
-        "y": 1040,
+        "x": 480,
+        "y": 80,
         "z": "subflow:lead-dev"
     },
     {
@@ -74,8 +74,8 @@
                 "post-lead-transition"
             ]
         ],
-        "x": 560,
-        "y": 1040,
+        "x": 720,
+        "y": 80,
         "z": "subflow:lead-dev"
     },
     {
@@ -93,8 +93,8 @@
             [],
             []
         ],
-        "x": 760,
-        "y": 1040,
+        "x": 960,
+        "y": 80,
         "z": "subflow:lead-dev"
     }
 ]
