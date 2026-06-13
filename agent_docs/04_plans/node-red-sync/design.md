@@ -21,14 +21,14 @@
 ## Implementation Backlog
 
 ### Pending
-- Task 1: Update the configuration engine (`internal/config/config.go`) to support an optional `node_red_flows_path` configuration, defaulting to standard locations if omitted.
-- Task 2: Implement the semantic JSON normalization and SHA256 comparison engine under `internal/syncflow`.
-- Task 3: Implement the `sync-flows` subcommand in Go, comparing normalized content SHA256 hashes first (to prevent loops), and then comparing file modification times to perform the bidirectional sync.
-- Task 4: Add comprehensive unit and integration tests to verify both sync directions, key-order/format-invariant comparison, and loop-prevention short-circuiting.
 
 ### Current
 
 ### Completed
+- Task 1: Update the configuration engine (`internal/config/config.go`) to support an optional `node_red_flows_path` configuration, defaulting to standard locations if omitted.
+- Task 2: Implement the semantic JSON normalization and SHA256 comparison engine under `internal/syncflow`.
+- Task 3: Implement the `sync-flows` subcommand in Go, comparing normalized content SHA256 hashes first (to prevent loops), and then comparing file modification times to perform the bidirectional sync.
+- Task 4: Add comprehensive unit and integration tests to verify both sync directions, key-order/format-invariant comparison, and loop-prevention short-circuiting.
 
 ---
 

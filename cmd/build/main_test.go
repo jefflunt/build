@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jefflunt/build/internal/db"
 )
@@ -351,6 +352,302 @@ func TestRunCLI_DeployFlow_Success(t *testing.T) {
 	}
 	if !strings.Contains(receivedBody, `node1`) {
 		t.Errorf("expected body to contain node1, got %s", receivedBody)
+	}
+}
+
+func TestRunCLI_SyncFlows_AlreadyInSync(t *testing.T) {
+	// 1. Mock Node-RED server
+	var getCalled bool
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/flows" {
+			getCalled = true
+			w.WriteHeader(http.StatusOK)
+			// Return identical content, just different spacing
+			w.Write([]byte(`[{"type":"tab","id":"node1"}]`))
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}))
+	defer ts.Close()
+
+	// 2. Setup config
+	tempHome, err := os.MkdirTemp("", "sync-test-home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempHome)
+
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempHome)
+	defer os.Setenv("HOME", origHome)
+
+	buildDir := filepath.Join(tempHome, ".build")
+	os.MkdirAll(buildDir, 0755)
+
+	// We'll create a temp flows.json to simulate remote flow file on disk
+	remoteFlowsFile := filepath.Join(tempHome, "flows.json")
+	os.WriteFile(remoteFlowsFile, []byte(`[{"id":"node1","type":"tab"}]`), 0644)
+
+	configFile := filepath.Join(buildDir, "config.yml")
+	configData := []byte("agent_adapter: agent:live_opencode\nnode_red_url: " + ts.URL + "\nnode_red_flows_path: " + remoteFlowsFile)
+	os.WriteFile(configFile, configData, 0644)
+
+	// 3. Setup workspace
+	tempWorkspace, err := os.MkdirTemp("", "sync-test-workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempWorkspace)
+
+	origWd, _ := os.Getwd()
+	os.Chdir(tempWorkspace)
+	defer os.Chdir(origWd)
+
+	os.MkdirAll("workflows", 0755)
+	localFlowsFile := filepath.Join("workflows", "sdlc-orchestrator.json")
+	os.WriteFile(localFlowsFile, []byte(`[{"id":"node1","type":"tab"}]`), 0644)
+	os.MkdirAll(".build", 0755)
+
+	// 4. Run sync
+	syncFlows()
+
+	// 5. Verify GET was called, but no files were overwritten because they were already in sync
+	if !getCalled {
+		t.Error("expected GET /flows to be called to fetch remote flows")
+	}
+}
+
+func TestRunCLI_SyncFlows_LocalNewer(t *testing.T) {
+	// 1. Mock Node-RED server (expects POST)
+	var postCalled bool
+	var receivedBody string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/flows" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`[{"type":"tab","id":"old-remote-node"}]`))
+			return
+		}
+		if r.Method == "POST" && r.URL.Path == "/flows" {
+			postCalled = true
+			buf := new(bytes.Buffer)
+			buf.ReadFrom(r.Body)
+			receivedBody = buf.String()
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}))
+	defer ts.Close()
+
+	// 2. Setup config & mock remote flow file
+	tempHome, err := os.MkdirTemp("", "sync-local-newer-home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempHome)
+
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempHome)
+	defer os.Setenv("HOME", origHome)
+
+	buildDir := filepath.Join(tempHome, ".build")
+	os.MkdirAll(buildDir, 0755)
+
+	remoteFlowsFile := filepath.Join(tempHome, "flows.json")
+	os.WriteFile(remoteFlowsFile, []byte(`[{"id":"old-remote-node","type":"tab"}]`), 0644)
+
+	configFile := filepath.Join(buildDir, "config.yml")
+	configData := []byte("agent_adapter: agent:live_opencode\nnode_red_url: " + ts.URL + "\nnode_red_flows_path: " + remoteFlowsFile)
+	os.WriteFile(configFile, configData, 0644)
+
+	// 3. Setup workspace
+	tempWorkspace, err := os.MkdirTemp("", "sync-local-newer-workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempWorkspace)
+
+	origWd, _ := os.Getwd()
+	os.Chdir(tempWorkspace)
+	defer os.Chdir(origWd)
+
+	os.MkdirAll("workflows", 0755)
+	localFlowsFile := filepath.Join("workflows", "sdlc-orchestrator.json")
+	os.WriteFile(localFlowsFile, []byte(`[{"id":"new-local-node","type":"tab"}]`), 0644)
+	os.MkdirAll(".build", 0755)
+
+	// Set local file to be modified in the future (newer than remote)
+	future := time.Now().Add(1 * time.Hour)
+	err = os.Chtimes(localFlowsFile, future, future)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Set remote file to be modified in the past
+	past := time.Now().Add(-1 * time.Hour)
+	err = os.Chtimes(remoteFlowsFile, past, past)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 4. Run sync
+	syncFlows()
+
+	// 5. Verify POST was called with local content
+	if !postCalled {
+		t.Error("expected POST /flows to be called because local was newer")
+	}
+	if !strings.Contains(receivedBody, "new-local-node") {
+		t.Errorf("expected POST body to contain new-local-node, got %s", receivedBody)
+	}
+}
+
+func TestRunCLI_SyncFlows_RemoteNewer(t *testing.T) {
+	// 1. Mock Node-RED server (expects GET)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/flows" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`[{"type":"tab","id":"newer-remote-node"}]`))
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}))
+	defer ts.Close()
+
+	// 2. Setup config & mock remote flow file
+	tempHome, err := os.MkdirTemp("", "sync-remote-newer-home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempHome)
+
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempHome)
+	defer os.Setenv("HOME", origHome)
+
+	buildDir := filepath.Join(tempHome, ".build")
+	os.MkdirAll(buildDir, 0755)
+
+	remoteFlowsFile := filepath.Join(tempHome, "flows.json")
+	os.WriteFile(remoteFlowsFile, []byte(`[{"id":"newer-remote-node","type":"tab"}]`), 0644)
+
+	configFile := filepath.Join(buildDir, "config.yml")
+	configData := []byte("agent_adapter: agent:live_opencode\nnode_red_url: " + ts.URL + "\nnode_red_flows_path: " + remoteFlowsFile)
+	os.WriteFile(configFile, configData, 0644)
+
+	// 3. Setup workspace
+	tempWorkspace, err := os.MkdirTemp("", "sync-remote-newer-workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempWorkspace)
+
+	origWd, _ := os.Getwd()
+	os.Chdir(tempWorkspace)
+	defer os.Chdir(origWd)
+
+	os.MkdirAll("workflows", 0755)
+	localFlowsFile := filepath.Join("workflows", "sdlc-orchestrator.json")
+	os.WriteFile(localFlowsFile, []byte(`[{"id":"old-local-node","type":"tab"}]`), 0644)
+	os.MkdirAll(".build", 0755)
+
+	// Set remote file to be modified in the future (newer than local)
+	future := time.Now().Add(1 * time.Hour)
+	err = os.Chtimes(remoteFlowsFile, future, future)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Set local file to be modified in the past
+	past := time.Now().Add(-1 * time.Hour)
+	err = os.Chtimes(localFlowsFile, past, past)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 4. Run sync
+	syncFlows()
+
+	// 5. Verify local file was overwritten with remote content
+	localData, err := os.ReadFile(localFlowsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(localData), "newer-remote-node") {
+		t.Errorf("expected local file to be updated with newer-remote-node, got %s", string(localData))
+	}
+}
+
+func TestRunCLI_SyncFlows_SemanticInvariance(t *testing.T) {
+	// 1. Mock Node-RED server (expects GET)
+	var postCalled bool
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/flows" {
+			w.WriteHeader(http.StatusOK)
+			// Return identical content with different formatting and key order
+			w.Write([]byte(`[{"type":"tab","id":"node1","disabled":false}]`))
+			return
+		}
+		if r.Method == "POST" && r.URL.Path == "/flows" {
+			postCalled = true
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}))
+	defer ts.Close()
+
+	// 2. Setup config & mock remote flow file
+	tempHome, err := os.MkdirTemp("", "sync-invariant-home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempHome)
+
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempHome)
+	defer os.Setenv("HOME", origHome)
+
+	buildDir := filepath.Join(tempHome, ".build")
+	os.MkdirAll(buildDir, 0755)
+
+	remoteFlowsFile := filepath.Join(tempHome, "flows.json")
+	os.WriteFile(remoteFlowsFile, []byte(`[{"id":"node1","type":"tab","disabled":false}]`), 0644)
+
+	configFile := filepath.Join(buildDir, "config.yml")
+	configData := []byte("agent_adapter: agent:live_opencode\nnode_red_url: " + ts.URL + "\nnode_red_flows_path: " + remoteFlowsFile)
+	os.WriteFile(configFile, configData, 0644)
+
+	// 3. Setup workspace
+	tempWorkspace, err := os.MkdirTemp("", "sync-invariant-workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempWorkspace)
+
+	origWd, _ := os.Getwd()
+	os.Chdir(tempWorkspace)
+	defer os.Chdir(origWd)
+
+	os.MkdirAll("workflows", 0755)
+	localFlowsFile := filepath.Join("workflows", "sdlc-orchestrator.json")
+	// Write with different key order, spacing, and minification
+	os.WriteFile(localFlowsFile, []byte(`[ { "disabled": false, "id": "node1", "type": "tab" } ]`), 0644)
+	os.MkdirAll(".build", 0755)
+
+	// Make local mod time newer than remote, which would normally trigger sync
+	future := time.Now().Add(1 * time.Hour)
+	err = os.Chtimes(localFlowsFile, future, future)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 4. Run sync
+	syncFlows()
+
+	// 5. Verify no POST was called because the contents are semantically identical!
+	if postCalled {
+		t.Error("expected NO POST /flows to be called because files are semantically identical")
 	}
 }
 

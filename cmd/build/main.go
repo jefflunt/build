@@ -23,6 +23,7 @@ import (
 	"github.com/jefflunt/build/internal/db"
 	"github.com/jefflunt/build/internal/router"
 	"github.com/jefflunt/build/internal/rmcmd"
+	"github.com/jefflunt/build/internal/syncflow"
 	"github.com/jefflunt/build/internal/timecmd"
 	"github.com/jefflunt/build/pkg/version"
 )
@@ -85,6 +86,7 @@ func runCLI(args []string) {
 			{"time", "show rolled-up time spent on tasks"},
 			{"rm", "remove a task and its descendants by ID or status"},
 			{"deploy-flow", "deploy a Node-RED flow JSON to the configured server"},
+			{"sync-flows", "bidirectionally synchronize workflows with Node-RED"},
 			{"version", "show the build version"},
 		}
 		for _, c := range commands {
@@ -189,6 +191,8 @@ func runCLI(args []string) {
 			flowPath = args[2]
 		}
 		deployFlow(flowPath)
+	case "sync-flows":
+		syncFlows()
 	default:
 		fmt.Printf("Unknown subcommand: %s\n", args[1])
 		os.Exit(1)
@@ -738,4 +742,113 @@ func deployFlow(flowPath string) {
 	}
 
 	fmt.Printf("Successfully deployed Node-RED flow from %s to %s\n", flowPath, cfg.NodeRedURL)
+}
+
+func syncFlows() {
+	// 1. Load config
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 2. Resolve Node-RED flows path on disk
+	localPath := "workflows/sdlc-orchestrator.json"
+	var flowsPath string
+	if cfg.NodeRedFlowsPath != "" {
+		flowsPath = cfg.NodeRedFlowsPath
+	} else {
+		// Try standard paths
+		p1 := "/opt/homebrew/var/node-red/flows.json"
+		if _, err := os.Stat(p1); err == nil {
+			flowsPath = p1
+		} else {
+			home, _ := os.UserHomeDir()
+			p2 := filepath.Join(home, ".node-red", "flows.json")
+			if _, err := os.Stat(p2); err == nil {
+				flowsPath = p2
+			}
+		}
+	}
+
+	// 3. Load local flows (or default to empty if not found)
+	localBytes, err := os.ReadFile(localPath)
+	if err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Failed to read local flows file %s: %v\n", localPath, err)
+		os.Exit(1)
+	}
+	if len(localBytes) == 0 {
+		localBytes = []byte("[]")
+	}
+
+	// 4. Fetch remote flows via GET /flows
+	url := strings.TrimSuffix(cfg.NodeRedURL, "/") + "/flows"
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to connect to Node-RED server at %s: %v\n", url, err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(resp.Body)
+		fmt.Fprintf(os.Stderr, "Node-RED server returned error status %s: %s\n", resp.Status, buf.String())
+		os.Exit(1)
+	}
+
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(resp.Body)
+	remoteBytes := buf.Bytes()
+
+	// 5. Semantic Normalization & Comparison
+	normLocal, err := syncflow.Normalize(localBytes)
+	if err != nil {
+		normLocal = []byte("[]")
+	}
+	normRemote, err := syncflow.Normalize(remoteBytes)
+	if err != nil {
+		normRemote = []byte("[]")
+	}
+
+	hashLocal, _ := syncflow.Hash(normLocal)
+	hashRemote, _ := syncflow.Hash(normRemote)
+
+	if hashLocal == hashRemote {
+		fmt.Println("Workflows are already semantically in sync.")
+		return
+	}
+
+	// 6. Hashes differ. Compare file modification times to determine who wins
+	var localModTime time.Time
+	if localInfo, statErr := os.Stat(localPath); statErr == nil {
+		localModTime = localInfo.ModTime()
+	}
+
+	var remoteModTime time.Time
+	if flowsPath != "" {
+		if remoteInfo, statErr := os.Stat(flowsPath); statErr == nil {
+			remoteModTime = remoteInfo.ModTime()
+		}
+	}
+
+	if localModTime.After(remoteModTime) {
+		// Local file is newer -> Deploy to Node-RED
+		fmt.Printf("Local workflow is newer than Node-RED flow (Local: %s, Remote: %s). Deploying local to Node-RED...\n", localModTime.Format(time.RFC3339), remoteModTime.Format(time.RFC3339))
+		deployFlow(localPath)
+	} else {
+		// Node-RED is newer -> Save back to local
+		fmt.Printf("Node-RED flow is newer than local workflow (Remote: %s, Local: %s). Serializing Node-RED flow to %s...\n", remoteModTime.Format(time.RFC3339), localModTime.Format(time.RFC3339), localPath)
+
+		// Create workflows/ folder if missing
+		os.MkdirAll(filepath.Dir(localPath), 0755)
+
+		err = os.WriteFile(localPath, normRemote, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to write local workflow file: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Successfully synchronized Node-RED flow to %s\n", localPath)
+	}
 }

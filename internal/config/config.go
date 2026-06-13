@@ -50,6 +50,7 @@ func Parse(r io.Reader) (*Config, error) {
 	scanner := bufio.NewScanner(r)
 	var agentAdapter string
 	var nodeRedURL string
+	var nodeRedFlowsPath string
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -74,6 +75,8 @@ func Parse(r io.Reader) (*Config, error) {
 			agentAdapter = cleanVal
 		} else if key == "node_red_url" {
 			nodeRedURL = cleanVal
+		} else if key == "node_red_flows_path" {
+			nodeRedFlowsPath = cleanVal
 		}
 	}
 
@@ -94,6 +97,7 @@ func Parse(r io.Reader) (*Config, error) {
 		return nil, err
 	}
 	cfg.NodeRedURL = nodeRedURL
+	cfg.NodeRedFlowsPath = nodeRedFlowsPath
 	return cfg, nil
 }
 
