@@ -1,0 +1,3 @@
+# Port the hardcoded Go-based task routing and execution engine into an independent Node-RED hosted workflow that polls the SQLite database, coordinates agent execution (Dev -> Tester -> Boss) and workspace testing, and supports visual inspection and custom flow definitions.
+
+This task transitions the orchestration of SDLC agent tasks from a hardcoded Go background runner into an externally hosted, visually configurable Node-RED flow. This requires modifying the Go configuration utility to validate a Node-RED instance's base URL, creating a JSON flow file containing the visual orchestrator design (complete with polling, serialized locking, and agent routing logic), and providing an automated mechanism to deploy the flow to the live Node-RED instance via its Admin API.

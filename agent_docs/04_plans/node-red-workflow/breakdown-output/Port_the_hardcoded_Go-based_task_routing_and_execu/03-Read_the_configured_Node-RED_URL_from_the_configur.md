@@ -1,0 +1,3 @@
+# Read the configured Node-RED URL from the configuration file and the flow JSON definition, then deploy the flow to the active Node-RED instance using Go's HTTP client to make requests to the Node-RED Admin API.
+
+This task implements automatic deployment of the local Node-RED flow JSON to the active Node-RED instance. When triggered, the application will read 'node_red_url' from the configuration (~/.build/config.yml) and the flow definition from 'node-red-flow.json'. It will then utilize Go's 'net/http' package to interact with the Node-RED Admin API (specifically the `/flows` endpoint) to programmatically deploy the flow, handling any potential network or API errors gracefully.
