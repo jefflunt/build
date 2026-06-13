@@ -11,7 +11,6 @@
 ## Implementation Backlog
 
 ### Pending
-- Task 1: Update the config module (`internal/config/config.go`) to strictly require `node_red_url` (e.g. `node_red_url: http://localhost:1880`) in `~/.build/config.yml`. If missing, print a helpful error message explaining how to configure it. Update existing tests and example configurations.
 - Task 2: Create the Node-RED flow definition JSON file (`node-red-flow.json`) representing the entire Dev -> Tester -> Test Suite -> Boss workflow.
 - Task 3: Implement a mechanism to lock/serialize task execution in Node-RED to prevent concurrent/duplicate builds on subsequent polls.
 - Task 4: Deploy the Node-RED flow to the active Node-RED instance configured via `node_red_url` using the Node-RED admin API.
@@ -20,6 +19,7 @@
 ### Current
 
 ### Completed
+- Task 1: Update the config module (`internal/config/config.go`) to strictly require `node_red_url` (e.g. `node_red_url: http://localhost:1880`) in `~/.build/config.yml`. If missing, print a helpful error message explaining how to configure it. Update existing tests and example configurations.
 
 ---
 

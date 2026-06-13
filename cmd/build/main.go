@@ -2,18 +2,21 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/rand"
 	"database/sql"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/jefflunt/build/internal/cli"
 	"github.com/jefflunt/build/internal/config"
@@ -81,6 +84,7 @@ func runCLI(args []string) {
 			{"enqueue", "enqueue a plan file"},
 			{"time", "show rolled-up time spent on tasks"},
 			{"rm", "remove a task and its descendants by ID or status"},
+			{"deploy-flow", "deploy a Node-RED flow JSON to the configured server"},
 			{"version", "show the build version"},
 		}
 		for _, c := range commands {
@@ -179,6 +183,12 @@ func runCLI(args []string) {
 			os.Exit(1)
 		}
 		runRM(target)
+	case "deploy-flow":
+		flowPath := "workflows/sdlc-orchestrator.json"
+		if len(args) >= 3 {
+			flowPath = args[2]
+		}
+		deployFlow(flowPath)
 	default:
 		fmt.Printf("Unknown subcommand: %s\n", args[1])
 		os.Exit(1)
@@ -686,4 +696,46 @@ func runRM(target string) {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func deployFlow(flowPath string) {
+	// 1. Load config
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 2. Read flow file
+	flowData, err := os.ReadFile(flowPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: flow file %s could not be read: %v\n", flowPath, err)
+		os.Exit(1)
+	}
+
+	// 3. Prepare POST request to Node-RED Admin API
+	url := strings.TrimSuffix(cfg.NodeRedURL, "/") + "/flows"
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(flowData))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating HTTP request: %v\n", err)
+		os.Exit(1)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to connect to Node-RED server at %s: %v\n", url, err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(resp.Body)
+		fmt.Fprintf(os.Stderr, "Node-RED server returned error status %s: %s\n", resp.Status, buf.String())
+		os.Exit(1)
+	}
+
+	fmt.Printf("Successfully deployed Node-RED flow from %s to %s\n", flowPath, cfg.NodeRedURL)
 }

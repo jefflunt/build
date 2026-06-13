@@ -130,12 +130,13 @@ func TestParse(t *testing.T) {
 	}{
 		{
 			name: "valid minimal",
-			yaml: "agent_adapter: agent:test_opencode",
+			yaml: "agent_adapter: agent:test_opencode\nnode_red_url: http://localhost:1880",
 			expected: &Config{
 				AgentAdapter: "agent:test_opencode",
 				CLIName:      "agent",
 				Provider:     "test_opencode",
 				Model:        "",
+				NodeRedURL:   "http://localhost:1880",
 			},
 		},
 		{
@@ -143,22 +144,29 @@ func TestParse(t *testing.T) {
 			yaml: `
 # This is a comment
 agent_adapter: "agent:test_opencode" # use this adapter
+node_red_url: "http://localhost:1880"
 `,
 			expected: &Config{
 				AgentAdapter: "agent:test_opencode",
 				CLIName:      "agent",
 				Provider:     "test_opencode",
 				Model:        "",
+				NodeRedURL:   "http://localhost:1880",
 			},
 		},
 		{
-			name:          "missing field",
-			yaml:          "some_other_key: value",
+			name:          "missing field agent_adapter",
+			yaml:          "node_red_url: http://localhost:1880",
 			expectedError: "missing or empty 'agent_adapter' field in configuration",
 		},
 		{
+			name:          "missing field node_red_url",
+			yaml:          "agent_adapter: agent:test_opencode",
+			expectedError: "missing or empty 'node_red_url' field in configuration",
+		},
+		{
 			name:          "empty field",
-			yaml:          "agent_adapter: ",
+			yaml:          "agent_adapter: \nnode_red_url: http://localhost:1880",
 			expectedError: "missing or empty 'agent_adapter' field in configuration",
 		},
 	}
@@ -200,13 +208,13 @@ func (m *mockConfigSource) Load() ([]byte, error) {
 func TestLoadFromSource(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		mock := &mockConfigSource{
-			data: []byte("agent_adapter: agent:test_opencode"),
+			data: []byte("agent_adapter: agent:test_opencode\nnode_red_url: http://localhost:1880"),
 		}
 		got, err := LoadFromSource(mock)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got.CLIName != "agent" || got.Provider != "test_opencode" || got.Model != "" {
+		if got.CLIName != "agent" || got.Provider != "test_opencode" || got.Model != "" || got.NodeRedURL != "http://localhost:1880" {
 			t.Errorf("unexpected parsed config: %+v", got)
 		}
 	})
@@ -232,7 +240,7 @@ func TestFileConfigSource_Load(t *testing.T) {
 	}
 	defer os.Remove(tempFile.Name())
 
-	expectedContent := []byte("agent_adapter: agent:test_opencode")
+	expectedContent := []byte("agent_adapter: agent:test_opencode\nnode_red_url: http://localhost:1880")
 	if _, err := tempFile.Write(expectedContent); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
@@ -285,7 +293,7 @@ func TestLoad(t *testing.T) {
 	}
 
 	// Case 3: Config file is valid
-	validConfig := []byte("agent_adapter: agent:test_opencode")
+	validConfig := []byte("agent_adapter: agent:test_opencode\nnode_red_url: http://localhost:1880")
 	if err := os.WriteFile(configFile, validConfig, 0644); err != nil {
 		t.Fatalf("failed to write config file: %v", err)
 	}
@@ -295,7 +303,7 @@ func TestLoad(t *testing.T) {
 		t.Fatalf("unexpected error loading valid config: %v", err)
 	}
 
-	if cfg.CLIName != "agent" || cfg.Provider != "test_opencode" || cfg.Model != "" {
+	if cfg.CLIName != "agent" || cfg.Provider != "test_opencode" || cfg.Model != "" || cfg.NodeRedURL != "http://localhost:1880" {
 		t.Errorf("unexpected loaded config: %+v", cfg)
 	}
 }

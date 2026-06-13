@@ -16,6 +16,7 @@ type Config struct {
 	CLIName      string // e.g., "opencode"
 	Provider     string // e.g., "anthropic"
 	Model        string // e.g., "claude-3.5-sonnet"
+	NodeRedURL   string // e.g., "http://localhost:1880"
 }
 
 // ConfigSource defines the interface for loading raw configuration bytes.
@@ -47,6 +48,7 @@ func GetConfigPath() (string, error) {
 func Parse(r io.Reader) (*Config, error) {
 	scanner := bufio.NewScanner(r)
 	var agentAdapter string
+	var nodeRedURL string
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -64,10 +66,13 @@ func Parse(r io.Reader) (*Config, error) {
 		}
 
 		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+		cleanVal := stripCommentsAndQuotes(val)
+
 		if key == "agent_adapter" {
-			val := strings.TrimSpace(parts[1])
-			agentAdapter = stripCommentsAndQuotes(val)
-			break
+			agentAdapter = cleanVal
+		} else if key == "node_red_url" {
+			nodeRedURL = cleanVal
 		}
 	}
 
@@ -79,7 +84,16 @@ func Parse(r io.Reader) (*Config, error) {
 		return nil, errors.New("missing or empty 'agent_adapter' field in configuration")
 	}
 
-	return ParseAdapter(agentAdapter)
+	if nodeRedURL == "" {
+		return nil, errors.New("missing or empty 'node_red_url' field in configuration. Please specify 'node_red_url' in your config file (e.g., node_red_url: http://localhost:1880)")
+	}
+
+	cfg, err := ParseAdapter(agentAdapter)
+	if err != nil {
+		return nil, err
+	}
+	cfg.NodeRedURL = nodeRedURL
+	return cfg, nil
 }
 
 // ParseBytes parses configuration from a slice of bytes.

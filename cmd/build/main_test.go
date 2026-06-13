@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -270,6 +272,85 @@ func TestRunCLI_RM_Abort(t *testing.T) {
 	_ = dbVerify.QueryRow("SELECT COUNT(*) FROM audit_logs WHERE task_id = 'task1'").Scan(&count)
 	if count != 1 {
 		t.Error("Expected audit logs NOT to be deleted from audit_logs table")
+	}
+}
+
+func TestRunCLI_DeployFlow_Success(t *testing.T) {
+	// 1. Start a mock Node-RED server
+	var receivedBody string
+	var receivedMethod string
+	var receivedPath string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedMethod = r.Method
+		receivedPath = r.URL.Path
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(r.Body)
+		receivedBody = buf.String()
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"revision": "xyz"}`))
+	}))
+	defer ts.Close()
+
+	// 2. Setup mock home directory and configuration
+	tempHome, err := os.MkdirTemp("", "deploy-flow-test-home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempHome)
+
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempHome)
+	defer os.Setenv("HOME", origHome)
+
+	buildDir := filepath.Join(tempHome, ".build")
+	if err := os.MkdirAll(buildDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	configFile := filepath.Join(buildDir, "config.yml")
+	configData := []byte("agent_adapter: agent:live_opencode\nnode_red_url: " + ts.URL)
+	if err := os.WriteFile(configFile, configData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Create a mock flow file in the workspace
+	tempWorkspace, err := os.MkdirTemp("", "deploy-flow-test-workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempWorkspace)
+
+	origWd, _ := os.Getwd()
+	os.Chdir(tempWorkspace)
+	defer os.Chdir(origWd)
+
+	// Create workflows directory
+	if err := os.MkdirAll("workflows", 0755); err != nil {
+		t.Fatal(err)
+	}
+	flowFile := filepath.Join("workflows", "sdlc-orchestrator.json")
+	flowData := []byte(`[{"id":"node1","type":"tab"}]`)
+	if err := os.WriteFile(flowFile, flowData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create .build in workspace too because init/runCLI checks it
+	if err := os.MkdirAll(".build", 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 4. Run CLI command
+	deployFlow(flowFile)
+
+	// 5. Verify the HTTP request to mock Node-RED
+	if receivedMethod != "POST" {
+		t.Errorf("expected POST method, got %s", receivedMethod)
+	}
+	if receivedPath != "/flows" {
+		t.Errorf("expected path /flows, got %s", receivedPath)
+	}
+	if !strings.Contains(receivedBody, `node1`) {
+		t.Errorf("expected body to contain node1, got %s", receivedBody)
 	}
 }
 
