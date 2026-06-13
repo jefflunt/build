@@ -715,7 +715,7 @@ func deployFlow(flowPath string) {
 		var merged []interface{}
 		flows, _ := filepath.Glob("flows/*.json")
 		subflows, _ := filepath.Glob("subflows/*.json")
-		allFiles := append(flows, subflows...)
+		allFiles := append(subflows, flows...)
 
 		for _, f := range allFiles {
 			content, err := os.ReadFile(f)
@@ -1051,8 +1051,23 @@ func syncFlows() {
 
 	if remoteChanged {
 		var finalNodes []interface{}
+		// First, append all subflow partitions (definitions) so they are processed first on load
 		for _, part := range remotePartMap {
-			finalNodes = append(finalNodes, part.Nodes...)
+			if part.Type == "subflow" {
+				finalNodes = append(finalNodes, part.Nodes...)
+			}
+		}
+		// Next, append all tab partitions (flow tabs)
+		for _, part := range remotePartMap {
+			if part.Type == "tab" {
+				finalNodes = append(finalNodes, part.Nodes...)
+			}
+		}
+		// Next, append any other partitions (like globals)
+		for _, part := range remotePartMap {
+			if part.Type != "subflow" && part.Type != "tab" {
+				finalNodes = append(finalNodes, part.Nodes...)
+			}
 		}
 
 		finalBytes, _ := json.Marshal(finalNodes)

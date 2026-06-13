@@ -80,7 +80,7 @@
     {
         "id": "inst:query-work",
         "name": "query-work Instance",
-        "type": "subflow:query-work",
+        "type": "subflow:subflow:query-work",
         "wires": [],
         "x": 150,
         "y": 150,
@@ -89,7 +89,7 @@
     {
         "id": "inst:dev",
         "name": "dev Instance",
-        "type": "subflow:dev",
+        "type": "subflow:subflow:dev",
         "wires": [],
         "x": 350,
         "y": 300,
@@ -98,7 +98,7 @@
     {
         "id": "inst:tester",
         "name": "tester Instance",
-        "type": "subflow:tester",
+        "type": "subflow:subflow:tester",
         "wires": [],
         "x": 550,
         "y": 300,
@@ -107,7 +107,7 @@
     {
         "id": "inst:boss",
         "name": "boss Instance",
-        "type": "subflow:boss",
+        "type": "subflow:subflow:boss",
         "wires": [],
         "x": 750,
         "y": 300,
@@ -116,7 +116,7 @@
     {
         "id": "inst:sweep",
         "name": "sweep Instance",
-        "type": "subflow:sweep",
+        "type": "subflow:subflow:sweep",
         "wires": [],
         "x": 350,
         "y": 450,
@@ -125,7 +125,7 @@
     {
         "id": "inst:lead-dev",
         "name": "lead-dev Instance",
-        "type": "subflow:lead-dev",
+        "type": "subflow:subflow:lead-dev",
         "wires": [],
         "x": 550,
         "y": 450,
@@ -134,7 +134,7 @@
     {
         "id": "inst:move-workflow",
         "name": "move-workflow Instance",
-        "type": "subflow:move-workflow",
+        "type": "subflow:subflow:move-workflow",
         "wires": [],
         "x": 150,
         "y": 300,
