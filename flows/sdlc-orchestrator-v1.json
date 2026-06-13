@@ -19,7 +19,7 @@
                 "http-response"
             ]
         ],
-        "x": 140,
+        "x": 160,
         "y": 140,
         "z": "build-orchestrator-tab"
     },
@@ -30,7 +30,7 @@
         "statusCode": "200",
         "type": "http response",
         "wires": [],
-        "x": 380,
+        "x": 400,
         "y": 140,
         "z": "build-orchestrator-tab"
     },
@@ -51,8 +51,8 @@
             [],
             []
         ],
-        "x": 560,
-        "y": 500,
+        "x": 300,
+        "y": 260,
         "z": "build-orchestrator-tab"
     },
     {
@@ -70,8 +70,8 @@
                 "route-task"
             ]
         ],
-        "x": 790,
-        "y": 180,
+        "x": 510,
+        "y": 260,
         "z": "build-orchestrator-tab"
     },
     {
@@ -115,20 +115,20 @@
                 "handle-blocked"
             ],
             [
-                "inst:dev"
+                "2590223f7a77f735"
             ],
             [
-                "inst:tester"
+                "5abfdc611bccc85f"
             ],
             [
-                "inst:boss"
+                "bd4a7dcbb892494e"
             ],
             [
-                "inst:lead-dev"
+                "e4b7ab3cc373c1a9"
             ]
         ],
-        "x": 990,
-        "y": 180,
+        "x": 710,
+        "y": 260,
         "z": "build-orchestrator-tab"
     },
     {
@@ -144,44 +144,8 @@
         "wires": [
             []
         ],
-        "x": 1300,
-        "y": 120,
-        "z": "build-orchestrator-tab"
-    },
-    {
-        "id": "inst:dev",
-        "name": "dev Instance",
-        "type": "subflow:subflow:dev",
-        "wires": [],
-        "x": 1300,
-        "y": 170,
-        "z": "build-orchestrator-tab"
-    },
-    {
-        "id": "inst:tester",
-        "name": "tester Instance",
-        "type": "subflow:subflow:tester",
-        "wires": [],
-        "x": 1300,
-        "y": 220,
-        "z": "build-orchestrator-tab"
-    },
-    {
-        "id": "inst:boss",
-        "name": "boss Instance",
-        "type": "subflow:subflow:boss",
-        "wires": [],
-        "x": 1300,
-        "y": 270,
-        "z": "build-orchestrator-tab"
-    },
-    {
-        "id": "inst:lead-dev",
-        "name": "lead-dev Instance",
-        "type": "subflow:subflow:lead-dev",
-        "wires": [],
-        "x": 1300,
-        "y": 320,
+        "x": 1020,
+        "y": 200,
         "z": "build-orchestrator-tab"
     },
     {
@@ -199,8 +163,46 @@
                 "get-task"
             ]
         ],
-        "x": 1590,
-        "y": 340,
+        "x": 110,
+        "y": 260,
+        "z": "build-orchestrator-tab"
+    },
+    {
+        "id": "2590223f7a77f735",
+        "name": "",
+        "type": "subflow:subflow:dev",
+        "wires": [
+            []
+        ],
+        "x": 1010,
+        "y": 240,
+        "z": "build-orchestrator-tab"
+    },
+    {
+        "id": "5abfdc611bccc85f",
+        "name": "",
+        "type": "subflow:subflow:tester",
+        "wires": [],
+        "x": 1020,
+        "y": 280,
+        "z": "build-orchestrator-tab"
+    },
+    {
+        "id": "bd4a7dcbb892494e",
+        "name": "",
+        "type": "subflow:subflow:boss",
+        "wires": [],
+        "x": 1020,
+        "y": 320,
+        "z": "build-orchestrator-tab"
+    },
+    {
+        "id": "e4b7ab3cc373c1a9",
+        "name": "",
+        "type": "subflow:subflow:lead-dev",
+        "wires": [],
+        "x": 1030,
+        "y": 360,
         "z": "build-orchestrator-tab"
     }
 ]
