@@ -2,142 +2,241 @@
     {
         "disabled": false,
         "id": "build-orchestrator-tab",
-        "info": "This flow visually ports the Go-based build router. It polls every 5 seconds, implements strict serialization (locking), executes agents via CLI, runs workspace tests, and performs git sweeps.",
+        "info": "This flow is the central SDLC automation orchestrator, designed as an on-demand, event-triggered Hub-and-Spoke system. It listens on HTTP POST /trigger-build, enforces execution locking, pulls tasks via 'build task next', and routes to the appropriate agent subflow spoke.",
         "label": "Build SDLC Orchestrator",
         "type": "tab"
     },
     {
-        "h": 97,
-        "id": "bef2c4cc24966901",
-        "nodes": [
-            "inject-poll",
-            "check-lock",
-            "get-config",
-            "parse-config"
-        ],
-        "style": {
-            "color": "#f0f0f0",
-            "fill": "rgba(255, 255, 255, 0.03)",
-            "fill-opacity": "1",
-            "label": true,
-            "label-position": "nw",
-            "stroke": "#555555",
-            "stroke-opacity": "1"
-        },
-        "type": "group",
-        "w": 822,
-        "x": 14,
-        "y": 31.5,
-        "z": "build-orchestrator-tab"
+        "id": "http-trigger",
+        "type": "http in",
+        "z": "build-orchestrator-tab",
+        "name": "HTTP Listener /trigger-build",
+        "url": "/trigger-build",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 140,
+        "y": 140,
+        "wires": [
+            [
+                "http-response",
+                "check-lock"
+            ]
+        ]
     },
     {
-        "h": 97,
-        "id": "41c9cc03de72b45f",
-        "nodes": [
-            "eval-stuck",
-            "check-stuck-tasks",
-            "eval-blocked",
-            "check-blocked-tasks"
-        ],
-        "style": {
-            "color": "#f0f0f0",
-            "fill": "rgba(255, 255, 255, 0.03)",
-            "fill-opacity": "1",
-            "label": true,
-            "label-position": "nw",
-            "stroke": "#555555",
-            "stroke-opacity": "1"
-        },
-        "type": "group",
-        "w": 902,
-        "x": 604,
-        "y": 151.5,
-        "z": "build-orchestrator-tab"
+        "id": "http-response",
+        "type": "http response",
+        "z": "build-orchestrator-tab",
+        "name": "Return 200 OK",
+        "statusCode": "200",
+        "headers": {},
+        "x": 360,
+        "y": 80,
+        "wires": []
     },
     {
-        "h": 97,
-        "id": "bd8b1d0d14690530",
-        "nodes": [
-            "get-next-todo",
-            "eval-todo",
-            "init-task-assignment"
-        ],
-        "style": {
-            "color": "#f0f0f0",
-            "fill": "rgba(255, 255, 255, 0.03)",
-            "fill-opacity": "1",
-            "label": true,
-            "label-position": "nw",
-            "stroke": "#555555",
-            "stroke-opacity": "1"
-        },
-        "type": "group",
-        "w": 672,
-        "x": 1194,
-        "y": 311.5,
-        "z": "build-orchestrator-tab"
+        "id": "check-lock",
+        "type": "function",
+        "z": "build-orchestrator-tab",
+        "name": "Check & Set Lock",
+        "func": "if (flow.get('is_processing') === true) {\n    node.status({ fill: 'yellow', shape: 'ring', text: 'Locked (already processing)' });\n    return null;\n}\n\nflow.set('is_processing', true);\nnode.status({ fill: 'blue', shape: 'dot', text: 'Lock acquired' });\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 370,
+        "y": 180,
+        "wires": [
+            [
+                "get-task"
+            ]
+        ]
     },
     {
-        "id": "inst:query-work",
-        "name": "query-work Instance",
-        "type": "subflow:subflow:query-work",
-        "wires": [],
-        "x": 150,
-        "y": 150,
-        "z": "build-orchestrator-tab"
+        "id": "get-task",
+        "type": "exec",
+        "z": "build-orchestrator-tab",
+        "command": "build task next",
+        "addpay": false,
+        "append": "",
+        "useSpawn": "false",
+        "timer": "",
+        "oldrc": false,
+        "name": "Get Next Task",
+        "x": 580,
+        "y": 180,
+        "wires": [
+            [
+                "parse-task"
+            ],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "parse-task",
+        "type": "function",
+        "z": "build-orchestrator-tab",
+        "name": "Parse Task JSON",
+        "func": "var stdout = (msg.payload || '').trim();\nif (stdout === '' || stdout === '{}') {\n    node.status({ fill: 'green', shape: 'ring', text: 'All tasks finished' });\n    flow.set('is_processing', false);\n    return null;\n}\ntry {\n    var task = JSON.parse(stdout);\n    if (!task || !task.id) {\n        node.status({ fill: 'green', shape: 'ring', text: 'All tasks finished' });\n        flow.set('is_processing', false);\n        return null;\n    }\n    msg.task = task;\n    msg.assigneeID = task.agent_id ? parseInt(task.agent_id) : 2;\n    node.status({ fill: 'blue', shape: 'dot', text: 'Task ID: ' + task.id + ' (Assignee: ' + msg.assigneeID + ')' });\n    return msg;\n} catch (e) {\n    node.error('Error parsing task: ' + e.message);\n    flow.set('is_processing', false);\n    return null;\n}",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 180,
+        "wires": [
+            [
+                "route-task"
+            ]
+        ]
+    },
+    {
+        "id": "route-task",
+        "type": "switch",
+        "z": "build-orchestrator-tab",
+        "name": "Route Task",
+        "property": "assigneeID",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "1",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "2",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "3",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "4",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "5",
+                "vt": "num"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 5,
+        "x": 990,
+        "y": 180,
+        "wires": [
+            [
+                "handle-blocked"
+            ],
+            [
+                "inst:dev"
+            ],
+            [
+                "inst:tester"
+            ],
+            [
+                "inst:boss"
+            ],
+            [
+                "inst:lead-dev"
+            ]
+        ]
+    },
+    {
+        "id": "handle-blocked",
+        "type": "function",
+        "z": "build-orchestrator-tab",
+        "name": "Handle Blocked Task",
+        "func": "node.warn('Workflow blocked by failed task: ' + msg.task.id + '. Waiting for Owner intervention.');\nnode.status({ fill: 'red', shape: 'dot', text: 'Blocked by failed task: ' + msg.task.id });\nflow.set('is_processing', false);\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1220,
+        "y": 80,
+        "wires": [
+            []
+        ]
     },
     {
         "id": "inst:dev",
-        "name": "dev Instance",
         "type": "subflow:subflow:dev",
-        "wires": [],
-        "x": 350,
-        "y": 300,
-        "z": "build-orchestrator-tab"
+        "z": "build-orchestrator-tab",
+        "name": "dev Instance",
+        "x": 1200,
+        "y": 130,
+        "wires": [
+            [
+                "loop-back"
+            ]
+        ]
     },
     {
         "id": "inst:tester",
-        "name": "tester Instance",
         "type": "subflow:subflow:tester",
-        "wires": [],
-        "x": 550,
-        "y": 300,
-        "z": "build-orchestrator-tab"
+        "z": "build-orchestrator-tab",
+        "name": "tester Instance",
+        "x": 1200,
+        "y": 180,
+        "wires": [
+            [
+                "loop-back"
+            ]
+        ]
     },
     {
         "id": "inst:boss",
-        "name": "boss Instance",
         "type": "subflow:subflow:boss",
-        "wires": [],
-        "x": 750,
-        "y": 300,
-        "z": "build-orchestrator-tab"
-    },
-    {
-        "id": "inst:sweep",
-        "name": "sweep Instance",
-        "type": "subflow:subflow:sweep",
-        "wires": [],
-        "x": 350,
-        "y": 450,
-        "z": "build-orchestrator-tab"
+        "z": "build-orchestrator-tab",
+        "name": "boss Instance",
+        "x": 1200,
+        "y": 230,
+        "wires": [
+            [
+                "loop-back"
+            ]
+        ]
     },
     {
         "id": "inst:lead-dev",
-        "name": "lead-dev Instance",
         "type": "subflow:subflow:lead-dev",
-        "wires": [],
-        "x": 550,
-        "y": 450,
-        "z": "build-orchestrator-tab"
+        "z": "build-orchestrator-tab",
+        "name": "lead-dev Instance",
+        "x": 1200,
+        "y": 280,
+        "wires": [
+            [
+                "loop-back"
+            ]
+        ]
     },
     {
-        "id": "inst:move-workflow",
-        "name": "move-workflow Instance",
-        "type": "subflow:subflow:move-workflow",
-        "wires": [],
-        "x": 150,
-        "y": 300,
-        "z": "build-orchestrator-tab"
+        "id": "loop-back",
+        "type": "function",
+        "z": "build-orchestrator-tab",
+        "name": "Loop Back",
+        "func": "return msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1390,
+        "y": 180,
+        "wires": [
+            [
+                "get-task"
+            ]
+        ]
     }
 ]

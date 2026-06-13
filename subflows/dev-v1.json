@@ -32,7 +32,7 @@
     },
     {
         "finalize": "",
-        "func": "msg.payload = \"sqlite3 -json .build/build.db \\\"SELECT a.role, c.content FROM comments c JOIN agents a ON c.agent_id = a.id WHERE c.task_id = '\" + msg.task.id + \"' ORDER BY c.id ASC\\\"\";\nreturn msg;",
+        "func": "msg.payload = \"build task comments --id \" + msg.task.id;\nreturn msg;",
         "id": "prep-comments-query",
         "initialize": "",
         "libs": [],

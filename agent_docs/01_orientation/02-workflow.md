@@ -4,7 +4,7 @@ This document defines the deterministic rules for task management, agent interac
 
 ## 1. The Core Lifecycle (Dev -> Tester -> Boss)
 
-All actionable tasks (leaf nodes in the task tree) begin in the `todo` status and are processed in the following linear workflow, orchestrated entirely by the `Router`:
+All actionable tasks (leaf nodes in the task tree) begin in the `todo` status and are processed in the following linear workflow, orchestrated entirely by the Node-RED Router using the transaction-safe `build task` CLI command group:
 
 1. **Dev Assignment**: The Router assigns the task to the `Dev`. The Router reads the task description and comment history from the database and injects it directly into the Dev's instructions. The Dev implements the feature/fix and exits.
 2. **Tester Assignment**: The Router hands the task to the `Tester`, again injecting full context. The Tester writes unit tests targeting the Dev's code and exits. (If tests were added, the Tester updates `.build/test` to trigger them; otherwise, the default `exit 0` handles the pipeline).

@@ -21,7 +21,7 @@
     },
     {
         "finalize": "",
-        "func": "msg.payload = \"sqlite3 -json .build/build.db \\\"SELECT content FROM comments WHERE task_id = '\" + msg.task.id + \"' AND agent_id = 4 ORDER BY id DESC LIMIT 1\\\"\";\nreturn msg;",
+        "func": "msg.payload = \"build task comments --id \" + msg.task.id;\nreturn msg;",
         "id": "prep-boss-last-comment",
         "initialize": "",
         "libs": [],
@@ -61,7 +61,7 @@
     },
     {
         "finalize": "",
-        "func": "var stdout = (msg.payload || '').trim();\nif (stdout === '') {\n    msg.boss_eval_status = 'format_error';\n    msg.error_reason = 'System Error: You exited without leaving a review. You MUST use build review to leave your evaluation.';\n    return msg;\n}\n\ntry {\n    var comments = JSON.parse(stdout);\n    if (!comments || comments.length === 0) {\n        msg.boss_eval_status = 'format_error';\n        msg.error_reason = 'System Error: No comments found. You MUST leave your evaluation.';\n        return msg;\n    }\n    \n    var lastComment = comments[0].content || '';\n    var cleaned = lastComment.replace(/```json/g, '').replace(/```/g, '').trim();\n    var payload = JSON.parse(cleaned);\n    \n    if (typeof payload.approval !== 'boolean' || !payload.reasoning) {\n        msg.boss_eval_status = 'format_error';\n        msg.error_reason = 'System Error: Missing approval (boolean) or reasoning (string) in your payload.';\n        return msg;\n    }\n    \n    msg.boss_approval = payload.approval;\n    msg.boss_reasoning = payload.reasoning;\n    msg.boss_eval_status = payload.approval ? 'approved' : 'rejected';\n} catch (e) {\n    msg.boss_eval_status = 'format_error';\n    msg.error_reason = 'System Error: Your review was not correctly formatted JSON. Please use build review.';\n}\nreturn msg;",
+        "func": "var stdout = (msg.payload || '').trim();\nif (stdout === '' || stdout === '[]') {\n    msg.boss_eval_status = 'format_error';\n    msg.error_reason = 'System Error: You exited without leaving a review. You MUST use build review to leave your evaluation.';\n    return msg;\n}\n\ntry {\n    var comments = JSON.parse(stdout);\n    var bossComments = comments.filter(function(c) {\n        return c.agent_id === 4 || c.role === 'boss';\n    });\n    if (bossComments.length === 0) {\n        msg.boss_eval_status = 'format_error';\n        msg.error_reason = 'System Error: No comments found. You MUST leave your evaluation.';\n        return msg;\n    }\n    \n    var lastComment = bossComments[bossComments.length - 1].content || '';\n    var cleaned = lastComment.replace(/```json/g, '').replace(/```/g, '').trim();\n    var payload = JSON.parse(cleaned);\n    \n    if (typeof payload.approval !== 'boolean' || !payload.reasoning) {\n        msg.boss_eval_status = 'format_error';\n        msg.error_reason = 'System Error: Missing approval (boolean) or reasoning (string) in your payload.';\n        return msg;\n    }\n    \n    msg.boss_approval = payload.approval;\n    msg.boss_reasoning = payload.reasoning;\n    msg.boss_eval_status = payload.approval ? 'approved' : 'rejected';\n} catch (e) {\n    msg.boss_eval_status = 'format_error';\n    msg.error_reason = 'System Error: Your review was not correctly formatted JSON. Please use build review.';\n}\nreturn msg;",
         "id": "eval-boss-comment",
         "initialize": "",
         "libs": [],
@@ -121,7 +121,7 @@
     },
     {
         "finalize": "",
-        "func": "msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'done' WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_approved', '\" + msg.adapter + \"', '', 'build');\\\"\";\nreturn msg;",
+        "func": "msg.payload = \"build task update --id \" + msg.task.id + \" --status done --audit-action task_approved\";\nreturn msg;",
         "id": "prep-boss-approve",
         "initialize": "",
         "libs": [],
@@ -161,7 +161,7 @@
     },
     {
         "finalize": "",
-        "func": "msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET approval_attempts = approval_attempts + 1 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_rejected', '\" + msg.adapter + \"', '', 'build');\\\" \u0026\u0026 \" +\n    \"sqlite3 -json .build/build.db \\\"SELECT approval_attempts, lead_interventions FROM tasks WHERE id = '\" + msg.task.id + \"'\\\"\";\nreturn msg;",
+        "func": "msg.payload = \"build task update --id \" + msg.task.id + \" --inc-approval-attempts --audit-action task_rejected\";\nreturn msg;",
         "id": "prep-boss-reject",
         "initialize": "",
         "libs": [],
@@ -201,7 +201,7 @@
     },
     {
         "finalize": "",
-        "func": "var stdout = (msg.payload || '').trim();\ntry {\n    var res = JSON.parse(stdout);\n    var attempts = res[0].approval_attempts;\n    var lead_interventions = res[0].lead_interventions;\n    \n    if (attempts \u003e= 3) {\n        if (lead_interventions \u003c 3) {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'stuck', agent_id = 5, approval_attempts = 0, lead_interventions = lead_interventions + 1 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'escalate_to_lead', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        } else {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = '\" + attempts + \"' WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_rejected', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        }\n    } else {\n        msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\n    }\n} catch (e) {\n    node.error('Error parsing boss attempts: ' + e.message);\n    msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"';\\\"\";\n}\nreturn msg;",
+        "func": "var stdout = (msg.payload || '').trim();\ntry {\n    var res = JSON.parse(stdout);\n    var taskObj = Array.isArray(res) ? res[0] : res;\n    var attempts = taskObj.approval_attempts;\n    var lead_interventions = taskObj.lead_interventions;\n    \n    if (attempts \u003e= 3) {\n        if (lead_interventions \u003c 3) {\n            msg.payload = \"build task update --id \" + msg.task.id + \" --status stuck --agent-id 5 --reset-approval-attempts --inc-lead-interventions --audit-action escalate_to_lead\";\n        } else {\n            msg.payload = \"build task update --id \" + msg.task.id + \" --status failed --agent-id 1 --audit-action task_rejected\";\n        }\n    } else {\n        msg.payload = \"build task update --id \" + msg.task.id + \" --agent-id 2 --audit-action assign_to_dev\";\n    }\n} catch (e) {\n    node.error('Error parsing boss attempts: ' + e.message);\n    msg.payload = \"build task update --id \" + msg.task.id + \" --agent-id 2\";\n}\nreturn msg;",
         "id": "eval-boss-escalation",
         "initialize": "",
         "libs": [],
@@ -241,7 +241,7 @@
     },
     {
         "finalize": "",
-        "func": "var formatErrMsg = msg.error_reason || 'System Error: Format validation failed.';\nmsg.payload = \"sqlite3 .build/build.db \\\"INSERT INTO comments (task_id, agent_id, content) VALUES ('\" + msg.task.id + \"', 1, '\" + formatErrMsg.replace(/'/g, \"''\") + \"'); UPDATE tasks SET approval_attempts = approval_attempts + 1 WHERE id = '\" + msg.task.id + \"';\\\" \u0026\u0026 \" +\n    \"sqlite3 -json .build/build.db \\\"SELECT approval_attempts, lead_interventions FROM tasks WHERE id = '\" + msg.task.id + \"'\\\"\";\nreturn msg;",
+        "func": "var formatErrMsg = msg.error_reason || 'System Error: Format validation failed.';\nmsg.payload = \"build task update --id \" + msg.task.id + \" --inc-approval-attempts --comment-author-id 1 --comment \\\"\" + formatErrMsg.replace(/\"/g, \"'\") + \"\\\"\";\nreturn msg;",
         "id": "prep-boss-format-err",
         "initialize": "",
         "libs": [],
@@ -281,7 +281,7 @@
     },
     {
         "finalize": "",
-        "func": "var stdout = (msg.payload || '').trim();\ntry {\n    var res = JSON.parse(stdout);\n    var attempts = res[0].approval_attempts;\n    var lead_interventions = res[0].lead_interventions;\n    \n    if (attempts \u003e= 3) {\n        if (lead_interventions \u003c 3) {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'stuck', agent_id = 5, approval_attempts = 0, lead_interventions = lead_interventions + 1 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'escalate_to_lead', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        } else {\n            msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET status = 'failed', agent_id = 1, approval_attempts = '\" + attempts + \"' WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'task_rejected', '\" + msg.adapter + \"', '', 'build');\\\"\";\n        }\n    } else {\n        msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 4 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_boss', '\" + msg.adapter + \"', '', 'build');\\\"\";\n    }\n} catch (e) {\n    node.error('Error parsing format err boss attempts: ' + e.message);\n    msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 4 WHERE id = '\" + msg.task.id + \"';\\\"\";\n}\nreturn msg;",
+        "func": "var stdout = (msg.payload || '').trim();\ntry {\n    var res = JSON.parse(stdout);\n    var taskObj = Array.isArray(res) ? res[0] : res;\n    var attempts = taskObj.approval_attempts;\n    var lead_interventions = taskObj.lead_interventions;\n    \n    if (attempts \u003e= 3) {\n        if (lead_interventions \u003c 3) {\n            msg.payload = \"build task update --id \" + msg.task.id + \" --status stuck --agent-id 5 --reset-approval-attempts --inc-lead-interventions --audit-action escalate_to_lead\";\n        } else {\n            msg.payload = \"build task update --id \" + msg.task.id + \" --status failed --agent-id 1 --audit-action task_rejected\";\n        }\n    } else {\n        msg.payload = \"build task update --id \" + msg.task.id + \" --agent-id 4 --audit-action assign_to_boss\";\n    }\n} catch (e) {\n    node.error('Error parsing format err boss attempts: ' + e.message);\n    msg.payload = \"build task update --id \" + msg.task.id + \" --agent-id 4\";\n}\nreturn msg;",
         "id": "eval-boss-format-err-escalation",
         "initialize": "",
         "libs": [],

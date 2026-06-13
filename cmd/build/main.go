@@ -8,6 +8,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -21,7 +22,6 @@ import (
 	"github.com/jefflunt/build/internal/cli"
 	"github.com/jefflunt/build/internal/config"
 	"github.com/jefflunt/build/internal/db"
-	"github.com/jefflunt/build/internal/router"
 	"github.com/jefflunt/build/internal/rmcmd"
 	"github.com/jefflunt/build/internal/syncflow"
 	"github.com/jefflunt/build/internal/timecmd"
@@ -87,6 +87,7 @@ func runCLI(args []string) {
 			{"rm", "remove a task and its descendants by ID or status"},
 			{"deploy-flow", "deploy a Node-RED flow JSON to the configured server"},
 			{"sync-flows", "bidirectionally synchronize workflows with Node-RED"},
+			{"task", "query or update task details"},
 			{"version", "show the build version"},
 		}
 		for _, c := range commands {
@@ -193,6 +194,23 @@ func runCLI(args []string) {
 		deployFlow(flowPath)
 	case "sync-flows":
 		syncFlows()
+	case "task":
+		if len(args) < 3 {
+			fmt.Println("Usage: build task <next|blocked|stuck|update>")
+			os.Exit(1)
+		}
+		sub := args[2]
+		switch sub {
+		case "next", "blocked", "stuck":
+			runTaskQuery(sub)
+		case "comments":
+			runTaskComments(args[3:])
+		case "update":
+			runTaskUpdate(args[3:])
+		default:
+			fmt.Printf("Unknown task subcommand: %s\n", sub)
+			os.Exit(1)
+		}
 	default:
 		fmt.Printf("Unknown subcommand: %s\n", args[1])
 		os.Exit(1)
@@ -223,15 +241,9 @@ func seedDB() {
 }
 
 func runRouter() {
-	cfg, err := config.Load()
+	_, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load configuration: %v\n", err)
-		os.Exit(1)
-	}
-
-	client, err := cli.NewClient(cfg.CLIName)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unsupported agent_adapter CLI: %s\n", cfg.CLIName)
 		os.Exit(1)
 	}
 
@@ -240,14 +252,6 @@ func runRouter() {
 		fmt.Fprintf(os.Stderr, "Error: Project not initialized. Run 'build init' first.\n")
 		os.Exit(1)
 	}
-
-	// Initialize DB
-	database, err := db.InitDB(".build/build.db")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to init DB: %v\n", err)
-		os.Exit(1)
-	}
-	defer database.Close()
 
 	// Write PID
 	pidDir := ".build"
@@ -263,9 +267,9 @@ func runRouter() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Start Router
-	r := router.NewRouter(database, client, cfg.Provider, cfg.Model, agentInstructions)
-	go r.Run()
+	// Trigger Node-RED on startup
+	fmt.Println("Starting Node-RED visual SDLC loop...")
+	triggerNodeRed()
 
 	<-sigChan
 	fmt.Println("Router stopped.")
@@ -301,6 +305,7 @@ func ingestTasks(targetPath string) {
 	}
 
 	fmt.Printf("Tasks from %s ingested into database.\n", targetPath)
+	triggerNodeRed()
 }
 
 func walkBreakdownDir(dirPath string, parentID string) (*Node, error) {
@@ -630,6 +635,7 @@ func redoTask(taskID string) {
 		fmt.Fprintf(os.Stderr, "Error updating task: %v\n", err)
 	} else {
 		fmt.Printf("Task %s has been reset and kicked back to the Developer.\n", taskID)
+		triggerNodeRed()
 	}
 }
 
@@ -1110,3 +1116,332 @@ func deployFlowData(flowData []byte, nodeRedURL string) {
 		os.Exit(1)
 	}
 }
+
+type TaskJSON struct {
+	ID                string  `json:"id"`
+	ParentID          *string `json:"parent_id,omitempty"`
+	Type              string  `json:"type,omitempty"`
+	Title             string  `json:"title"`
+	Description       string  `json:"description"`
+	Status            string  `json:"status"`
+	AgentID           *int    `json:"agent_id"`
+	ApprovalAttempts  int     `json:"approval_attempts"`
+	LeadInterventions int     `json:"lead_interventions"`
+}
+
+func runTaskQuery(sub string) {
+	database, err := db.InitDB(".build/build.db")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to init DB: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	var query string
+	switch sub {
+	case "blocked":
+		query = "SELECT id, parent_id, type, title, description, status, agent_id, approval_attempts, lead_interventions FROM tasks WHERE status = 'failed' LIMIT 1"
+	case "stuck":
+		query = "SELECT id, parent_id, type, title, description, status, agent_id, approval_attempts, lead_interventions FROM tasks WHERE status = 'stuck' LIMIT 1"
+	case "next":
+		query = `SELECT t.id, t.parent_id, t.type, t.title, t.description, t.status, t.agent_id, t.approval_attempts, t.lead_interventions 
+                 FROM tasks t 
+                 WHERE t.status = 'todo' 
+                   AND NOT EXISTS (
+                       SELECT 1 FROM tasks c 
+                       WHERE c.parent_id = t.id AND c.status = 'todo'
+                   ) 
+                 ORDER BY t.rowid ASC LIMIT 1`
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown query subcommand: %s\n", sub)
+		os.Exit(1)
+	}
+
+	row := database.QueryRow(query)
+	var t TaskJSON
+	var parentID sql.NullString
+	var taskType sql.NullString
+	var agentID sql.NullInt64
+	var description sql.NullString
+
+	err = row.Scan(&t.ID, &parentID, &taskType, &t.Title, &description, &t.Status, &agentID, &t.ApprovalAttempts, &t.LeadInterventions)
+	if err == sql.ErrNoRows {
+		fmt.Println("{}")
+		return
+	} else if err != nil {
+		fmt.Fprintf(os.Stderr, "Database query error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if parentID.Valid {
+		t.ParentID = &parentID.String
+	}
+	if taskType.Valid {
+		t.Type = taskType.String
+	}
+	if agentID.Valid {
+		val := int(agentID.Int64)
+		t.AgentID = &val
+	}
+	if description.Valid {
+		t.Description = description.String
+	}
+
+	jsonBytes, err := json.Marshal(t)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to marshal task: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(string(jsonBytes))
+}
+
+func runTaskUpdate(args []string) {
+	fs := flag.NewFlagSet("task update", flag.ExitOnError)
+	id := fs.String("id", "", "Task ID (mandatory)")
+	status := fs.String("status", "", "Update task status")
+	agentID := fs.Int("agent-id", -1, "Update current assignee agent ID")
+	incApproval := fs.Bool("inc-approval-attempts", false, "Increment approval attempts")
+	incLead := fs.Bool("inc-lead-interventions", false, "Increment lead interventions")
+	resetApproval := fs.Bool("reset-approval-attempts", false, "Reset approval attempts to 0")
+	comment := fs.String("comment", "", "Insert a comment")
+	commentAuthor := fs.Int("comment-author-id", 1, "Author ID of the inserted comment")
+	auditAction := fs.String("audit-action", "", "Insert an audit log record")
+	duration := fs.Int("duration", 0, "Duration field for the audit log")
+
+	err := fs.Parse(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
+
+	if *id == "" {
+		fmt.Fprintf(os.Stderr, "Error: --id flag is mandatory\n")
+		os.Exit(1)
+	}
+
+	database, err := db.InitDB(".build/build.db")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to init DB: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	tx, err := database.Begin()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to begin transaction: %v\n", err)
+		os.Exit(1)
+	}
+	defer tx.Rollback()
+
+	if *status != "" {
+		_, err = tx.Exec("UPDATE tasks SET status = ? WHERE id = ?", *status, *id)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to update status: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	if *agentID != -1 {
+		_, err = tx.Exec("UPDATE tasks SET agent_id = ? WHERE id = ?", *agentID, *id)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to update agent-id: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	if *incApproval {
+		_, err = tx.Exec("UPDATE tasks SET approval_attempts = approval_attempts + 1 WHERE id = ?", *id)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to increment approval attempts: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	if *incLead {
+		_, err = tx.Exec("UPDATE tasks SET lead_interventions = lead_interventions + 1 WHERE id = ?", *id)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to increment lead interventions: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	if *resetApproval {
+		_, err = tx.Exec("UPDATE tasks SET approval_attempts = 0 WHERE id = ?", *id)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to reset approval attempts: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	if *comment != "" {
+		_, err = tx.Exec("INSERT INTO comments (task_id, agent_id, content) VALUES (?, ?, ?)", *id, *commentAuthor, *comment)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to insert comment: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	if *auditAction != "" {
+		_, err = tx.Exec(`INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, duration_seconds, opencode_agent) 
+                          VALUES (?, ?, ?, ?, ?, ?, ?)`, 
+			*id, 1, *auditAction, "", "", *duration, "build")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to insert audit log: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to commit transaction: %v\n", err)
+		os.Exit(1)
+	}
+
+	printTaskByID(*id)
+}
+
+func printTaskByID(taskID string) {
+	database, err := db.InitDB(".build/build.db")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to init DB: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	row := database.QueryRow("SELECT id, parent_id, type, title, description, status, agent_id, approval_attempts, lead_interventions FROM tasks WHERE id = ?", taskID)
+	var t TaskJSON
+	var parentID sql.NullString
+	var taskType sql.NullString
+	var agentID sql.NullInt64
+	var description sql.NullString
+
+	err = row.Scan(&t.ID, &parentID, &taskType, &t.Title, &description, &t.Status, &agentID, &t.ApprovalAttempts, &t.LeadInterventions)
+	if err == sql.ErrNoRows {
+		fmt.Println("{}")
+		return
+	} else if err != nil {
+		fmt.Fprintf(os.Stderr, "Database query error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if parentID.Valid {
+		t.ParentID = &parentID.String
+	}
+	if taskType.Valid {
+		t.Type = taskType.String
+	}
+	if agentID.Valid {
+		val := int(agentID.Int64)
+		t.AgentID = &val
+	}
+	if description.Valid {
+		t.Description = description.String
+	}
+
+	jsonBytes, err := json.Marshal(t)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to marshal task: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(string(jsonBytes))
+}
+
+func triggerNodeRed() {
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to load config to trigger Node-RED: %v\n", err)
+		return
+	}
+
+	url := strings.TrimSuffix(cfg.NodeRedURL, "/") + "/trigger-build"
+	payload := map[string]string{
+		"trigger": "cli",
+	}
+	jsonBytes, _ := json.Marshal(payload)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to create trigger request: %v\n", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to connect to Node-RED trigger endpoint at %s: %v\n", url, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		fmt.Fprintf(os.Stderr, "Warning: Node-RED trigger endpoint returned status %s\n", resp.Status)
+	} else {
+		fmt.Println("Triggered Node-RED build loop successfully.")
+	}
+}
+
+type CommentJSON struct {
+	ID        int    `json:"id"`
+	TaskID    string `json:"task_id"`
+	AgentID   int    `json:"agent_id"`
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	Timestamp string `json:"timestamp"`
+}
+
+func runTaskComments(args []string) {
+	fs := flag.NewFlagSet("task comments", flag.ExitOnError)
+	id := fs.String("id", "", "Task ID (mandatory)")
+
+	err := fs.Parse(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
+
+	if *id == "" {
+		fmt.Fprintf(os.Stderr, "Error: --id flag is mandatory\n")
+		os.Exit(1)
+	}
+
+	database, err := db.InitDB(".build/build.db")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to init DB: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	rows, err := database.Query(`
+		SELECT c.id, c.task_id, c.agent_id, a.role, c.content, c.timestamp 
+		FROM comments c 
+		JOIN agents a ON c.agent_id = a.id 
+		WHERE c.task_id = ? 
+		ORDER BY c.id ASC`, *id)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to query comments: %v\n", err)
+		os.Exit(1)
+	}
+	defer rows.Close()
+
+	comments := []CommentJSON{}
+	for rows.Next() {
+		var c CommentJSON
+		err = rows.Scan(&c.ID, &c.TaskID, &c.AgentID, &c.Role, &c.Content, &c.Timestamp)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to scan comment row: %v\n", err)
+			os.Exit(1)
+		}
+		comments = append(comments, c)
+	}
+
+	jsonBytes, err := json.Marshal(comments)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to marshal comments: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(string(jsonBytes))
+}
+
+
+

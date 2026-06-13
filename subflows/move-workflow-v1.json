@@ -40,7 +40,7 @@
     },
     {
         "finalize": "",
-        "func": "msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 2 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_dev', '\" + msg.adapter + \"', '', 'build');\\\"\";\nreturn msg;",
+        "func": "msg.payload = \"build task update --id \" + msg.task.id + \" --agent-id 2 --audit-action assign_to_dev\";\nreturn msg;",
         "id": "prep-db-assignment",
         "initialize": "",
         "libs": [],
@@ -129,7 +129,7 @@
     },
     {
         "finalize": "",
-        "func": "msg.payload = \"sqlite3 .build/build.db \\\"UPDATE tasks SET agent_id = 3 WHERE id = '\" + msg.task.id + \"'; INSERT INTO audit_logs (task_id, actor_id, action, llm_provider, llm_model, opencode_agent) VALUES ('\" + msg.task.id + \"', 1, 'assign_to_tester', '\" + msg.adapter + \"', '', 'build');\\\"\";\nreturn msg;",
+        "func": "msg.payload = \"build task update --id \" + msg.task.id + \" --agent-id 3 --audit-action assign_to_tester\";\nreturn msg;",
         "id": "prep-dev-transition",
         "initialize": "",
         "libs": [],

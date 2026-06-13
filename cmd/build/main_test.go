@@ -827,3 +827,317 @@ func TestRunCLI_SyncFlows_DeletionsAndAdditions(t *testing.T) {
 	}
 }
 
+func TestRunCLI_TaskQuery(t *testing.T) {
+	// Setup a temporary directory to run the test in so we have a clean/isolated environment
+	tempDir, err := os.MkdirTemp("", "main-task-query-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create .build directory and initialize database
+	buildDir := filepath.Join(tempDir, ".build")
+	if err := os.MkdirAll(buildDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	dbPath := filepath.Join(buildDir, "build.db")
+	database, err := db.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to init DB: %v", err)
+	}
+
+	// Insert test data:
+	// Parent task (status: todo, has a todo child so it's not actionable yet)
+	// Child task (status: todo, leaf, so it IS actionable)
+	// Failed task (for blocked query)
+	// Stuck task (for stuck query)
+	_, err = database.Exec(`
+		INSERT INTO tasks (id, parent_id, title, description, status, agent_id, approval_attempts, lead_interventions) VALUES 
+		('parent', NULL, 'Parent Task', 'Parent Desc', 'todo', 2, 0, 0),
+		('child', 'parent', 'Child Task', 'Child Desc', 'todo', 2, 0, 0),
+		('failed-task', NULL, 'Failed Task', 'Failed Desc', 'failed', 1, 2, 1),
+		('stuck-task', NULL, 'Stuck Task', 'Stuck Desc', 'stuck', 5, 1, 2);
+	`)
+	if err != nil {
+		t.Fatalf("Failed to insert test tasks: %v", err)
+	}
+	database.Close()
+
+	if os.Getenv("BE_CRASHER_TASK_QUERY") == "1" {
+		runCLI([]string{"build", "task", os.Getenv("TASK_SUBCOMMAND")})
+		return
+	}
+
+	// Helper to run query and return stdout
+	runQuery := func(sub string) string {
+		cmd := exec.Command(os.Args[0], "-test.run=TestRunCLI_TaskQuery")
+		cmd.Dir = tempDir
+		cmd.Env = append(os.Environ(), "BE_CRASHER_TASK_QUERY=1", "TASK_SUBCOMMAND="+sub)
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		err = cmd.Run()
+		if err != nil {
+			t.Fatalf("expected successful execution for %s, got error: %v, stderr: %s", sub, err, stderr.String())
+		}
+		return strings.TrimSpace(stdout.String())
+	}
+
+	// 1. Check next (should return child task, NOT parent task)
+	nextOut := runQuery("next")
+	if !strings.Contains(nextOut, `"id":"child"`) {
+		t.Errorf("expected next query to return child task, got: %s", nextOut)
+	}
+	if strings.Contains(nextOut, `"id":"parent"`) {
+		t.Errorf("expected next query NOT to return parent task, got: %s", nextOut)
+	}
+
+	// 2. Check blocked
+	blockedOut := runQuery("blocked")
+	if !strings.Contains(blockedOut, `"id":"failed-task"`) {
+		t.Errorf("expected blocked query to return failed-task, got: %s", blockedOut)
+	}
+	if !strings.Contains(blockedOut, `"approval_attempts":2`) || !strings.Contains(blockedOut, `"lead_interventions":1`) {
+		t.Errorf("expected blocked query to return approval_attempts=2 and lead_interventions=1, got: %s", blockedOut)
+	}
+
+	// 3. Check stuck
+	stuckOut := runQuery("stuck")
+	if !strings.Contains(stuckOut, `"id":"stuck-task"`) {
+		t.Errorf("expected stuck query to return stuck-task, got: %s", stuckOut)
+	}
+	if !strings.Contains(stuckOut, `"approval_attempts":1`) || !strings.Contains(stuckOut, `"lead_interventions":2`) {
+		t.Errorf("expected stuck query to return approval_attempts=1 and lead_interventions=2, got: %s", stuckOut)
+	}
+}
+
+func TestRunCLI_TaskUpdate(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "main-task-update-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	buildDir := filepath.Join(tempDir, ".build")
+	if err := os.MkdirAll(buildDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	dbPath := filepath.Join(buildDir, "build.db")
+	database, err := db.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to init DB: %v", err)
+	}
+
+	_, err = database.Exec(`
+		INSERT INTO tasks (id, title, status, agent_id, approval_attempts, lead_interventions) VALUES 
+		('task1', 'Task One', 'todo', 2, 0, 0);
+	`)
+	if err != nil {
+		t.Fatalf("Failed to insert test task: %v", err)
+	}
+	database.Close()
+
+	if os.Getenv("BE_CRASHER_TASK_UPDATE") == "1" {
+		runCLI([]string{"build", "task", "update", 
+			"--id", "task1", 
+			"--status", "stuck", 
+			"--agent-id", "5", 
+			"--inc-approval-attempts", 
+			"--inc-lead-interventions", 
+			"--comment", "This task is stuck!", 
+			"--comment-author-id", "2", 
+			"--audit-action", "escalated_to_lead",
+		})
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestRunCLI_TaskUpdate")
+	cmd.Dir = tempDir
+	cmd.Env = append(os.Environ(), "BE_CRASHER_TASK_UPDATE=1")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	if err != nil {
+		t.Fatalf("expected successful execution, got error: %v, stderr: %s", err, stderr.String())
+	}
+
+	out := strings.TrimSpace(stdout.String())
+	if !strings.Contains(out, `"id":"task1"`) || !strings.Contains(out, `"status":"stuck"`) || !strings.Contains(out, `"approval_attempts":1`) {
+		t.Errorf("expected updated task JSON in stdout, got: %q", out)
+	}
+
+	// Verify updates in database
+	dbCheck, err := db.InitDB(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dbCheck.Close()
+
+	var status string
+	var agentID, approvalAttempts, leadInterventions int
+	err = dbCheck.QueryRow("SELECT status, agent_id, approval_attempts, lead_interventions FROM tasks WHERE id = 'task1'").Scan(
+		&status, &agentID, &approvalAttempts, &leadInterventions,
+	)
+	if err != nil {
+		t.Fatalf("Failed to query updated task: %v", err)
+	}
+
+	if status != "stuck" {
+		t.Errorf("expected status stuck, got %s", status)
+	}
+	if agentID != 5 {
+		t.Errorf("expected agent_id 5, got %d", agentID)
+	}
+	if approvalAttempts != 1 {
+		t.Errorf("expected approval_attempts 1, got %d", approvalAttempts)
+	}
+	if leadInterventions != 1 {
+		t.Errorf("expected lead_interventions 1, got %d", leadInterventions)
+	}
+
+	// Check comment
+	var commentContent string
+	var commentAgentID int
+	err = dbCheck.QueryRow("SELECT agent_id, content FROM comments WHERE task_id = 'task1'").Scan(&commentAgentID, &commentContent)
+	if err != nil {
+		t.Fatalf("Failed to query inserted comment: %v", err)
+	}
+	if commentContent != "This task is stuck!" {
+		t.Errorf("expected comment 'This task is stuck!', got %s", commentContent)
+	}
+	if commentAgentID != 2 {
+		t.Errorf("expected comment agent_id 2, got %d", commentAgentID)
+	}
+
+	// Check audit log
+	var auditAction string
+	err = dbCheck.QueryRow("SELECT action FROM audit_logs WHERE task_id = 'task1'").Scan(&auditAction)
+	if err != nil {
+		t.Fatalf("Failed to query inserted audit log: %v", err)
+	}
+	if auditAction != "escalated_to_lead" {
+		t.Errorf("expected audit action 'escalated_to_lead', got %s", auditAction)
+	}
+}
+
+func TestRunCLI_TriggerNodeRed(t *testing.T) {
+	// 1. Start mock server
+	var receivedMethod string
+	var receivedPath string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedMethod = r.Method
+		receivedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status": "ok"}`))
+	}))
+	defer ts.Close()
+
+	// 2. Setup mock home directory and configuration
+	tempHome, err := os.MkdirTemp("", "trigger-test-home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempHome)
+
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempHome)
+	defer os.Setenv("HOME", origHome)
+
+	buildDir := filepath.Join(tempHome, ".build")
+	if err := os.MkdirAll(buildDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	configFile := filepath.Join(buildDir, "config.yml")
+	configData := []byte("agent_adapter: agent:live_opencode\nnode_red_url: " + ts.URL)
+	if err := os.WriteFile(configFile, configData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Initialize mock DB so build redo doesn't fail
+	dbPath := filepath.Join(buildDir, "build.db")
+	database, err := db.InitDB(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = database.Exec("INSERT INTO tasks (id, status, agent_id) VALUES ('task_redo', 'failed', 1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	database.Close()
+
+	// 4. Change working directory to tempHome so build can find the DB
+	origWd, _ := os.Getwd()
+	os.Chdir(tempHome)
+	defer os.Chdir(origWd)
+
+	// 5. Run a redo command which should trigger Node-RED
+	runCLI([]string{"build", "redo", "task_redo"})
+
+	// 6. Verify mock server received POST /trigger-build
+	if receivedMethod != "POST" {
+		t.Errorf("expected POST method, got %s", receivedMethod)
+	}
+	if receivedPath != "/trigger-build" {
+		t.Errorf("expected /trigger-build path, got %s", receivedPath)
+	}
+}
+
+func TestRunCLI_TaskComments(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "main-task-comments-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	buildDir := filepath.Join(tempDir, ".build")
+	if err := os.MkdirAll(buildDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	dbPath := filepath.Join(buildDir, "build.db")
+	database, err := db.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to init DB: %v", err)
+	}
+
+	// Insert test comments
+	_, err = database.Exec(`
+		INSERT INTO agents (id, role, name) VALUES (1, 'owner', 'Owner'), (5, 'lead_developer', 'Lead Developer');
+		INSERT INTO tasks (id, title) VALUES ('task1', 'Task One');
+		INSERT INTO comments (task_id, agent_id, content) VALUES ('task1', 5, 'Comment from lead');
+	`)
+	if err != nil {
+		t.Fatalf("Failed to insert test comments: %v", err)
+	}
+	database.Close()
+
+	if os.Getenv("BE_CRASHER_TASK_COMMENTS") == "1" {
+		runCLI([]string{"build", "task", "comments", "--id", "task1"})
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestRunCLI_TaskComments")
+	cmd.Dir = tempDir
+	cmd.Env = append(os.Environ(), "BE_CRASHER_TASK_COMMENTS=1")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	if err != nil {
+		t.Fatalf("expected successful execution, got error: %v, stderr: %s", err, stderr.String())
+	}
+
+	out := strings.TrimSpace(stdout.String())
+	if !strings.Contains(out, `"role":"lead_developer"`) || !strings.Contains(out, `"content":"Comment from lead"`) {
+		t.Errorf("expected comments list JSON in stdout, got: %q", out)
+	}
+}
+
+
+
+
+

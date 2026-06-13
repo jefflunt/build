@@ -104,7 +104,7 @@
     {
         "addpay": false,
         "append": "",
-        "command": "sqlite3 -json .build/build.db \"SELECT id, status FROM tasks WHERE status = 'failed' LIMIT 1\"",
+        "command": "build task blocked",
         "g": "41c9cc03de72b45f",
         "id": "check-blocked-tasks",
         "name": "Check Blocked Tasks",
@@ -146,7 +146,7 @@
     {
         "addpay": false,
         "append": "",
-        "command": "sqlite3 -json .build/build.db \"SELECT id, title, description, status FROM tasks WHERE status = 'stuck' LIMIT 1\"",
+        "command": "build task stuck",
         "g": "41c9cc03de72b45f",
         "id": "check-stuck-tasks",
         "name": "Check Stuck Tasks",
@@ -191,7 +191,7 @@
     {
         "addpay": false,
         "append": "",
-        "command": "sqlite3 -json .build/build.db \"SELECT t.id, t.title, t.description, t.agent_id FROM tasks t WHERE t.status = 'todo' AND NOT EXISTS ( SELECT 1 FROM tasks c WHERE c.parent_id = t.id AND c.status = 'todo' ) ORDER BY t.rowid ASC LIMIT 1\"",
+        "command": "build task next",
         "g": "bd8b1d0d14690530",
         "id": "get-next-todo",
         "name": "Get Next Todo",
